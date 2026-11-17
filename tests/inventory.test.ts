@@ -29,21 +29,22 @@ describe("Phase 4: Parking Inventory Management", () => {
   });
 
   it("creates a new parking area with unique code validation", async () => {
+    const testCode = `TEST-WEST-${Date.now()}`;
     const newArea = await InventoryService.createArea({
       name: "West Science Quad Lot",
-      code: "TEST-WEST-LOT",
+      code: testCode,
       description: "Temporary test lot for inventory verification",
     });
 
     createdAreaId = newArea.id;
     expect(newArea.id).toBeDefined();
-    expect(newArea.code).toBe("TEST-WEST-LOT");
+    expect(newArea.code).toBe(testCode);
 
     // Attempting duplicate code must fail with ConflictError
     await expect(
       InventoryService.createArea({
         name: "Duplicate Lot",
-        code: "TEST-WEST-LOT",
+        code: testCode,
       })
     ).rejects.toThrow(ConflictError);
   });

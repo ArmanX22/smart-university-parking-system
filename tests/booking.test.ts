@@ -15,11 +15,11 @@ describe("Phase 5: Transactional Booking Engine & Concurrency Protections", () =
   let testSlotId: string;
 
   beforeAll(async () => {
-    // 1. Setup test area
+    // 1. Setup test area with unique code
     const area = await prisma.parkingArea.create({
       data: {
         name: "Concurrency Test Lab Lot",
-        code: "TEST-RACE-LOT",
+        code: `TEST-RACE-${Date.now()}`,
         totalSlots: 1,
       },
     });

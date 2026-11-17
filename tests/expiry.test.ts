@@ -12,11 +12,11 @@ describe("Phase 6: Timers and Expiry Scheduler", () => {
   let slot2Id: string;
 
   beforeAll(async () => {
-    // 1. Create Area
+    // 1. Create Area with unique code
     const area = await prisma.parkingArea.create({
       data: {
         name: "Expiry Scheduler Test Lot",
-        code: "TEST-EXPIRY-LOT",
+        code: `TEST-EXPIRY-${Date.now()}`,
         totalSlots: 2,
       },
     });
