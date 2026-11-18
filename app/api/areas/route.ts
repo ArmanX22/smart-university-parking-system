@@ -7,7 +7,7 @@ import { handleApiError, ValidationError } from "@/server/errors/api-error";
 export async function GET() {
   try {
     const areas = await InventoryService.listAreas();
-    return Response.json({ success: true, data: areas });
+    return Response.json({ success: true, data: areas, areas });
   } catch (error) {
     return handleApiError(error);
   }

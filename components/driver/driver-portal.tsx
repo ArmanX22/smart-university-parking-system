@@ -89,9 +89,10 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
       const res = await fetch("/api/areas");
       if (res.ok) {
         const data = await res.json();
-        setAreas(data.areas || []);
-        if (data.areas?.length > 0 && !selectedAreaId) {
-          setSelectedAreaId(data.areas[0].id);
+        const areaList = data.areas || data.data || [];
+        setAreas(areaList);
+        if (areaList.length > 0 && !selectedAreaId) {
+          setSelectedAreaId(areaList[0].id);
         }
       }
     } catch {

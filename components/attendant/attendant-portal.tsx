@@ -52,9 +52,10 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
       const res = await fetch("/api/areas");
       if (res.ok) {
         const data = await res.json();
-        setAreas(data.areas || []);
-        if (!currentAreaId && data.areas?.length > 0) {
-          setCurrentAreaId(data.areas[0].id);
+        const areaList = data.areas || data.data || [];
+        setAreas(areaList);
+        if (!currentAreaId && areaList.length > 0) {
+          setCurrentAreaId(areaList[0].id);
         }
       }
     } catch {
@@ -69,7 +70,7 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
       const res = await fetch(`/api/slots?areaId=${areaId}`);
       if (res.ok) {
         const data = await res.json();
-        setSlots(data.slots || []);
+        setSlots(data.slots || data.data || []);
       }
     } catch {
       // quiet fail

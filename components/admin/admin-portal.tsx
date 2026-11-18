@@ -103,20 +103,20 @@ export default function AdminPortal({ user }: AdminPortalProps) {
 
       if (areasRes.ok) {
         const aData = await areasRes.json();
-        const areaList: ParkingAreaMetric[] = aData.areas || [];
+        const areaList: ParkingAreaMetric[] = aData.areas || aData.data || [];
         setAreas(areaList);
-        if (areaList.length > 0 && !selectedAreaId) {
-          setSelectedAreaId(areaList[0].id);
-          setRegAreaId(areaList[0].id);
+        if (areaList.length > 0) {
+          setSelectedAreaId((prev) => prev || areaList[0].id);
+          setRegAreaId((prev) => prev || areaList[0].id);
         }
       }
 
       if (catRes.ok) {
         const cData = await catRes.json();
-        const catList: VehicleCategoryMetric[] = cData.categories || [];
+        const catList: VehicleCategoryMetric[] = cData.categories || cData.data || [];
         setCategories(catList);
-        if (catList.length > 0 && !regCategoryId) {
-          setRegCategoryId(catList[0].id);
+        if (catList.length > 0) {
+          setRegCategoryId((prev) => prev || catList[0].id);
         }
       }
     } catch {
@@ -124,7 +124,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedAreaId, regCategoryId]);
+  }, []);
 
   const loadSlots = useCallback(async (areaId: string) => {
     if (!areaId) return;
@@ -421,11 +421,15 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 onChange={(e) => setRegAreaId(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
               >
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.code})
-                  </option>
-                ))}
+                {areas.length === 0 ? (
+                  <option value="">No parking lots available</option>
+                ) : (
+                  areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.code})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -439,14 +443,18 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 onChange={(e) => setRegCategoryId(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
               >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name === "CAR" && "🚗 Car (Prefix: C)"}
-                    {c.name === "BIKE" && "🏍️ Motorcycle / Bike (Prefix: M)"}
-                    {c.name === "BUS" && "🚌 University Bus (Prefix: B)"}
-                    {c.name !== "CAR" && c.name !== "BIKE" && c.name !== "BUS" && `🚐 ${c.name} (Prefix: ${c.codePrefix})`}
-                  </option>
-                ))}
+                {categories.length === 0 ? (
+                  <option value="">No categories available</option>
+                ) : (
+                  categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name === "CAR" && "🚗 Car (Prefix: C)"}
+                      {c.name === "BIKE" && "🏍️ Motorcycle / Bike (Prefix: M)"}
+                      {c.name === "BUS" && "🚌 University Bus (Prefix: B)"}
+                      {c.name !== "CAR" && c.name !== "BIKE" && c.name !== "BUS" && `🚐 ${c.name} (Prefix: ${c.codePrefix})`}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
