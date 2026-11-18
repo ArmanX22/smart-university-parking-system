@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       : undefined;
 
     const slots = await InventoryService.listSlots({ areaId, categoryId, status });
-    return Response.json({ success: true, data: slots });
+    return Response.json({ success: true, data: slots, slots });
   } catch (error) {
     return handleApiError(error);
   }
