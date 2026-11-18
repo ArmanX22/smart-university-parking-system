@@ -35,19 +35,32 @@ providers.push(
       const email = credentials.email.trim().toLowerCase();
       const role = (credentials.role?.toUpperCase() as UserRole) || UserRole.DRIVER;
 
-      // Upsert user in TiDB to ensure campus user profile exists
-      let user = await prisma.user.findUnique({
-        where: { email },
-      });
+      // Resilient upsert with retry for serverless DB wake-up
+      let user = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          user = await prisma.user.findUnique({
+            where: { email },
+          });
+
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email,
+                name: email.split("@")[0].replace(".", " "),
+                role,
+              },
+            });
+          }
+          break;
+        } catch (err) {
+          if (attempt === 3) throw err;
+          await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+        }
+      }
 
       if (!user) {
-        user = await prisma.user.create({
-          data: {
-            email,
-            name: email.split("@")[0].replace(".", " "),
-            role,
-          },
-        });
+        throw new Error("Could not authenticate user record.");
       }
 
       return {
@@ -121,16 +134,20 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as unknown as { role: UserRole }).role || UserRole.DRIVER;
       }
 
-      // Re-verify against live TiDB database so any role changes reflect instantly
-      if (token.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: token.email },
-          select: { id: true, role: true },
-        });
+      // Only query TiDB if ID or role is not yet cached in the token
+      if ((!token.id || !token.role) && token.email) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email },
+            select: { id: true, role: true },
+          });
 
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.role = dbUser.role;
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+          }
+        } catch (err) {
+          console.warn("[Auth JWT] Non-blocking DB check failure:", err);
         }
       }
 
