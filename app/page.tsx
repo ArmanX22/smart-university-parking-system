@@ -28,7 +28,7 @@ export default function HomePage() {
           <div className="container px-4 md:px-8 text-center max-w-4xl mx-auto">
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-100/60 px-3 py-1 text-xs font-semibold text-blue-800 mb-6">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Smart Campus Parking Platform - Phase 1 Initialized
+              Smart Campus Parking Platform • University Live Production System
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl text-slate-900">
               Smart University Parking <br />

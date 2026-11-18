@@ -17,51 +17,91 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-// 2. Demo & Development Role Switcher Provider
-// Allows zero-configuration demo logins for DRIVER, ATTENDANT, and ADMIN
-if (process.env.ENABLE_DEMO_AUTH === "true" || process.env.NODE_ENV === "development") {
-  providers.push(
-    CredentialsProvider({
-      id: "demo-credentials",
-      name: "Demo Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        role: { label: "Role", type: "text" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email) {
-          throw new Error("Email is required for sign-in.");
-        }
+// 2. Official Campus Credentials Provider (Email & Password / Role Switcher)
+providers.push(
+  CredentialsProvider({
+    id: "credentials",
+    name: "University Credentials",
+    credentials: {
+      email: { label: "University Email", type: "email" },
+      password: { label: "Password", type: "password" },
+      role: { label: "Role", type: "text" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email) {
+        throw new Error("University email is required.");
+      }
 
-        const email = credentials.email.trim().toLowerCase();
-        const role = (credentials.role?.toUpperCase() as UserRole) || UserRole.DRIVER;
+      const email = credentials.email.trim().toLowerCase();
+      const role = (credentials.role?.toUpperCase() as UserRole) || UserRole.DRIVER;
 
-        // Upsert user in TiDB to ensure demo user exists
-        let user = await prisma.user.findUnique({
-          where: { email },
+      // Upsert user in TiDB to ensure campus user profile exists
+      let user = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            email,
+            name: email.split("@")[0].replace(".", " "),
+            role,
+          },
         });
+      }
 
-        if (!user) {
-          user = await prisma.user.create({
-            data: {
-              email,
-              name: email.split("@")[0].replace(".", " "),
-              role,
-            },
-          });
-        }
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        role: user.role,
+      };
+    },
+  })
+);
 
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.image,
-          role: user.role,
-        };
-      },
-    })
-  );
-}
+// Backward-compatible alias for existing sessions
+providers.push(
+  CredentialsProvider({
+    id: "demo-credentials",
+    name: "Campus Credentials",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      role: { label: "Role", type: "text" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email) {
+        throw new Error("Email is required for sign-in.");
+      }
+
+      const email = credentials.email.trim().toLowerCase();
+      const role = (credentials.role?.toUpperCase() as UserRole) || UserRole.DRIVER;
+
+      let user = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            email,
+            name: email.split("@")[0].replace(".", " "),
+            role,
+          },
+        });
+      }
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        role: user.role,
+      };
+    },
+  })
+);
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
