@@ -20,6 +20,9 @@ import {
   Navigation,
   ArrowRight,
   AlertTriangle,
+  FileText,
+  BarChart3,
+  HelpCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -175,7 +178,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
   async function handleRegisterSlots(e: React.FormEvent) {
     e.preventDefault();
     if (!regAreaId || !regCategoryId) {
-      setStatusMessage({ type: "error", text: "Please select both a parking area and vehicle category." });
+      setStatusMessage({ type: "error", text: "অনুগ্রহ করে একটি পার্কিং এরিয়া ও গাড়ির ক্যাটাগরি সিলেক্ট করুন।" });
       return;
     }
 
@@ -197,17 +200,17 @@ export default function AdminPortal({ user }: AdminPortalProps) {
 
         const data = await res.json();
         if (!res.ok) {
-          setStatusMessage({ type: "error", text: data.error || "Batch slot generation failed." });
+          setStatusMessage({ type: "error", text: data.error || "ব্যাচ স্লট তৈরি ব্যর্থ হয়েছে।" });
         } else {
           setStatusMessage({
             type: "success",
-            text: `Successfully generated ${data.generatedCount} new slots in TiDB!`,
+            text: `সফলভাবে ${data.generatedCount} টি নতুন পার্কিং স্লট ডাটাবেজে তৈরি করা হয়েছে!`,
           });
           await Promise.all([loadAreasAndCategories(), loadSlots(regAreaId)]);
         }
       } else {
         if (!singleSlotNumber.trim()) {
-          setStatusMessage({ type: "error", text: "Please enter a slot number (e.g. C16, M05, B03)." });
+          setStatusMessage({ type: "error", text: "অনুগ্রহ করে স্লট নম্বর লিখুন (যেমন: C16, M05, B03)।" });
           return;
         }
 
@@ -223,18 +226,18 @@ export default function AdminPortal({ user }: AdminPortalProps) {
 
         const data = await res.json();
         if (!res.ok) {
-          setStatusMessage({ type: "error", text: data.error || "Slot registration failed." });
+          setStatusMessage({ type: "error", text: data.error || "স্লট রেজিস্ট্রেশন ব্যর্থ হয়েছে।" });
         } else {
           setStatusMessage({
             type: "success",
-            text: `Slot "${data.data?.slotNumber || singleSlotNumber}" registered successfully in TiDB!`,
+            text: `স্লট "${data.data?.slotNumber || singleSlotNumber}" সফলভাবে ডাটাবেজে রেজিস্টার করা হয়েছে!`,
           });
           setSingleSlotNumber("");
           await Promise.all([loadAreasAndCategories(), loadSlots(regAreaId)]);
         }
       }
     } catch {
-      setStatusMessage({ type: "error", text: "Failed to communicate with server." });
+      setStatusMessage({ type: "error", text: "সার্ভারের সাথে যোগাযোগ করতে ব্যর্থ হয়েছে।" });
     } finally {
       setIsSubmittingSlot(false);
     }
@@ -253,16 +256,16 @@ export default function AdminPortal({ user }: AdminPortalProps) {
       if (res.ok) {
         setStatusMessage({
           type: "success",
-          text: `Slot status updated to ${newStatus}.`,
+          text: `স্লটের স্ট্যাটাস পরিবর্তন করে "${newStatus}" করা হয়েছে।`,
         });
         loadSlots(selectedAreaId);
         loadAreasAndCategories();
       } else {
         const data = await res.json();
-        setStatusMessage({ type: "error", text: data.error || "Failed to update slot status." });
+        setStatusMessage({ type: "error", text: data.error || "স্লট স্ট্যাটাস আপডেট ব্যর্থ হয়েছে।" });
       }
     } catch {
-      setStatusMessage({ type: "error", text: "Network error occurred." });
+      setStatusMessage({ type: "error", text: "নেটওয়ার্ক এরর হয়েছে।" });
     }
   }
 
@@ -279,6 +282,10 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         setExpiryResult(data.summary);
         loadAreasAndCategories();
         if (selectedAreaId) loadSlots(selectedAreaId);
+        setStatusMessage({
+          type: "success",
+          text: `এক্সপায়ারি চেকার সম্পন্ন হয়েছে। নো-শো বাতিল: ${data.summary.noShowsProcessed}, মুক্ত স্লট: ${data.summary.slotsFreed}`,
+        });
       }
     } catch {
       // quiet fail
@@ -340,7 +347,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
     return (
       <div
         key={slot.id}
-        className={`rounded-xl border p-3.5 transition-all text-center relative ${
+        className={`rounded-2xl border-2 p-3.5 transition-all text-center relative ${
           isAvailable
             ? "border-emerald-300 bg-emerald-50/50"
             : isReserved
@@ -358,7 +365,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
           {slot.category.name === "CAR" && <Car className="h-3 w-3 text-blue-600" />}
           {slot.category.name === "BIKE" && <Bike className="h-3 w-3 text-emerald-600" />}
           {slot.category.name === "BUS" && <Bus className="h-3 w-3 text-purple-600" />}
-          <span>{slot.category.name}</span>
+          <span>{slot.category.name === "BIKE" ? "Motorcycle" : slot.category.name}</span>
         </div>
 
         <div
@@ -372,7 +379,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               : "bg-slate-200 text-slate-700"
           }`}
         >
-          {slot.status}
+          {isAvailable ? "ফাঁকা (Available)" : isReserved ? "১৫মি বুকড (Reserved)" : isOccupied ? "পার্ক করা (Occupied)" : "বন্ধ (Maintenance)"}
         </div>
 
         {/* Maintenance Toggle */}
@@ -385,16 +392,16 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               isMaintenance
                 ? "Re-enable slot to AVAILABLE"
                 : isOccupied || isReserved
-                ? "Cannot modify in-use slot"
+                ? "চলমান গাড়ি থাকায় পরিবর্তন সম্ভব নয়"
                 : "Set slot to MAINTENANCE"
             }
-            className={`w-full py-1 rounded text-[10px] font-semibold transition-colors ${
+            className={`w-full py-1 rounded-lg text-[10px] font-bold transition-colors ${
               isMaintenance
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                 : "bg-slate-200 hover:bg-slate-300 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
             }`}
           >
-            {isMaintenance ? "Restore" : "Maintenance"}
+            {isMaintenance ? "চালু করুন (Restore)" : "বন্ধ করুন (Maintenance)"}
           </button>
         </div>
       </div>
@@ -402,19 +409,19 @@ export default function AdminPortal({ user }: AdminPortalProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header */}
       <header className="border-b bg-white sticky top-0 z-30">
         <div className="container mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white font-bold shadow-sm">
+            <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white font-bold shadow-sm">
               <Shield className="h-5 w-5" />
-            </div>
+            </Link>
             <div>
               <h1 className="font-bold text-slate-900 leading-none flex items-center gap-2">
-                Admin Console
+                Admin Management Console
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-                  Campus Admin
+                  বিশ্ববিদ্যালয় প্রশাসন
                 </span>
               </h1>
               <span className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
@@ -423,7 +430,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     isConnected ? "bg-emerald-500 animate-pulse" : isFallbackMode ? "bg-amber-500" : "bg-slate-400"
                   }`}
                 />
-                {isConnected ? "Real-Time Telemetry Active (SSE)" : "Polling Mode (10s)"}
+                {isConnected ? "রিয়েল-টাইম কন্ট্রোল সক্রিয় (SSE)" : "পোলিং মোড (১০ সেকেন্ড)"}
               </span>
             </div>
           </div>
@@ -439,7 +446,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
             >
               <LogOut className="h-3.5 w-3.5" />
-              Sign Out
+              লগআউট
             </Link>
           </div>
         </div>
@@ -450,7 +457,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         {/* Status Feedback Banner */}
         {statusMessage && (
           <div
-            className={`mb-6 p-4 rounded-xl flex items-center justify-between shadow-sm border ${
+            className={`mb-6 p-4 rounded-2xl flex items-center justify-between shadow-sm border ${
               statusMessage.type === "success"
                 ? "bg-emerald-50 text-emerald-900 border-emerald-200"
                 : "bg-rose-50 text-rose-900 border-rose-200"
@@ -473,58 +480,103 @@ export default function AdminPortal({ user }: AdminPortalProps) {
           </div>
         )}
 
-        {/* Global KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Total Campus Lots</span>
-            <div className="text-3xl font-black text-slate-900 mt-1">{areas.length}</div>
-            <span className="text-xs text-slate-400 font-medium">Configured parking zones</span>
+        {/* ========================================================================= */}
+        {/* ADMIN RESPONSIBILITIES & CONTROL CENTER BANNER (অ্যাডমিনের দায়িত্ব ও কাজ) */}
+        {/* ========================================================================= */}
+        <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-950 rounded-3xl p-6 sm:p-8 text-white mb-8 shadow-md border border-indigo-800/40">
+          <div className="max-w-3xl mb-6">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/20 px-3 py-1 rounded-full inline-block mb-2 border border-indigo-400/20">
+              Admin Operations Center &bull; অ্যাডমিনের মূল দায়িত্ব ও কন্ট্রোল
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              বিশ্ববিদ্যালয় পার্কিং প্রশাসন ড্যাশবোর্ড
+            </h2>
+            <p className="text-xs sm:text-sm text-indigo-200 mt-1 leading-relaxed">
+              এই অ্যাডমিন প্যানেল থেকে আপনি পুরো বিশ্ববিদ্যালয়ের পার্কিং সিস্টেম পরিচালনা করতে পারবেন। নিচে আপনার ৪টি প্রধান কাজ সাজিয়ে দেওয়া হলো:
+            </p>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Total Capacity</span>
-            <div className="text-3xl font-black text-slate-900 mt-1">{totalSlots}</div>
-            <span className="text-xs text-slate-400 font-medium">Slots across all lots</span>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 block">Available Slots</span>
-            <div className="text-3xl font-black text-emerald-700 mt-1">{availableSlots}</div>
-            <span className="text-xs text-emerald-600 font-medium">Ready for reservation</span>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-rose-600 block">Occupied / Active</span>
-            <div className="text-3xl font-black text-rose-700 mt-1">{occupiedSlots}</div>
-            <span className="text-xs text-rose-600 font-medium">Vehicles physically parked</span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+              <span className="text-xl mb-2 block">📊</span>
+              <h4 className="font-bold text-sm text-white">১. লাইভ মনিটরিং</h4>
+              <p className="text-[11px] text-indigo-200 mt-1">কতটি গাড়ি অবস্থান করছে, কতটি সিট খালি তা সরাসরি পর্যবেক্ষণ করা।</p>
+            </div>
+
+            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+              <span className="text-xl mb-2 block">➕</span>
+              <h4 className="font-bold text-sm text-white">২. স্লট তৈরি ও ব্যাচ</h4>
+              <p className="text-[11px] text-indigo-200 mt-1">এক ক্লিকে নতুন মোটরসাইকেল (Mxx), কার (Cxx), বাসের স্লট তৈরি করা।</p>
+            </div>
+
+            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+              <span className="text-xl mb-2 block">🚌</span>
+              <h4 className="font-bold text-sm text-white">৩. ফুলবাড়িয়া বাস প্ল্যান</h4>
+              <p className="text-[11px] text-indigo-200 mt-1">ফুলবাড়িয়া রুটের বাসের জন্য স্পেস প্রস্তুত রাখা ও ওভারফ্লো অ্যালার্ট পাওয়া।</p>
+            </div>
+
+            <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+              <span className="text-xl mb-2 block">⏱️</span>
+              <h4 className="font-bold text-sm text-white">৪. ১৫-মি এক্সপায়ারি</h4>
+              <p className="text-[11px] text-indigo-200 mt-1">১৫ মিনিটে গেটে না আসা নো-শো গাড়ি ক্যানসেল করে স্লট মুক্ত করা।</p>
+            </div>
           </div>
         </div>
 
-        {/* Fulbaria Route Bus Planner & Capacity Management Card (Field Visit Report Specification) */}
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white mb-8 shadow-sm border border-purple-800/40">
+        {/* Global KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">ক্যাম্পাস পার্কিং লট</span>
+            <div className="text-3xl font-black text-slate-900 mt-1">{areas.length} টি</div>
+            <span className="text-xs text-slate-400 font-medium">নিবন্ধিত জোন</span>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">মোট সিট/স্লট সংখ্যা</span>
+            <div className="text-3xl font-black text-slate-900 mt-1">{totalSlots} টি</div>
+            <span className="text-xs text-slate-400 font-medium">সব লট মিলিয়ে মোট স্পেস</span>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 block">ফাঁকা স্লট (Available)</span>
+            <div className="text-3xl font-black text-emerald-700 mt-1">{availableSlots} টি</div>
+            <span className="text-xs text-emerald-600 font-semibold">বুকিংয়ের জন্য প্রস্তুত</span>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-600 block">পার্ক করা গাড়ি (Occupied)</span>
+            <div className="text-3xl font-black text-rose-700 mt-1">{occupiedSlots} টি</div>
+            <span className="text-xs text-rose-600 font-semibold">গাড়ি বর্তমানে অবস্থান করছে</span>
+          </div>
+        </div>
+
+        {/* Fulbaria Route Bus Planner & Capacity Management Card */}
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white mb-8 shadow-sm border border-purple-800/40">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-200 text-xs font-semibold mb-2 border border-purple-400/20">
                 <Bus className="h-3.5 w-3.5 text-purple-300" />
-                <span>Upcoming Fulbaria Route Bus • Advance Capacity Planning</span>
+                <span>আসন্ন ফুলবাড়িয়া রুট বাস • ক্যাপাসিটি প্ল্যানার (Field Visit Requirement)</span>
               </div>
-              <h2 className="text-xl font-black tracking-tight text-white">Fulbaria Campus Shuttle Bay Management</h2>
+              <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                ফুলবাড়িয়া ক্যাম্পাস বাস শাটল বে ম্যানেজমেন্ট
+              </h2>
               <p className="text-xs text-purple-200 mt-1 leading-relaxed">
-                As required by the university field survey, the upcoming <strong>Fulbaria route bus</strong> is scheduled for campus service. Dedicated bus bays (B01, B02...) are tracked in real-time. If primary bays fill up, an immediate overflow alert is broadcast to attendants to open auxiliary bus staging areas.
+                বিশ্ববিদ্যালয়ের ফিল্ড ভিজিট রিপোর্ট অনুযায়ী আসন্ন <strong>ফুলবাড়িয়া রুটের বাসের</strong> জন্য নিবেদিত বাস বে (B01, B02...) প্রস্তুত রাখা হয়েছে। যদি ক্যাম্পাসের বাস বে পূর্ণ হয়ে যায়, সাথে সাথে অ্যাটেনডেন্টদের সেকেন্ডারি লট খোলার নির্দেশনা পাঠানো হয়।
               </p>
             </div>
 
-            <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm self-stretch lg:self-auto min-w-[280px]">
+            <div className="bg-white/10 p-5 rounded-2xl backdrop-blur-sm self-stretch lg:self-auto min-w-[280px]">
               <div className="flex items-center justify-between text-xs font-semibold mb-2">
-                <span className="text-purple-200">Campus Bus Bays:</span>
-                <span className="text-white font-mono">{availableBusSlots.length} / {busSlots.length} Free</span>
+                <span className="text-purple-200">ক্যাম্পাস বাস বে স্ট্যাটাস:</span>
+                <span className="text-white font-mono">{availableBusSlots.length} / {busSlots.length} টি খালি</span>
               </div>
               {availableBusSlots.length > 0 ? (
-                <div className="p-2.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-medium flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-medium flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                  <span>Bay {availableBusSlots[0]?.slotNumber} designated for Fulbaria Shuttle.</span>
+                  <span>বাস বে {availableBusSlots[0]?.slotNumber} ফুলবাড়িয়া বাসের জন্য বরাদ্দ।</span>
                 </div>
               ) : (
-                <div className="p-2.5 rounded-lg bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-medium flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-medium flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
-                  <span>CAPACITY ALERT: All primary bus bays occupied! Dispatch attendant to secondary lot.</span>
+                  <span>CAPACITY ALERT: সব বাস বে পূর্ণ! সেকেন্ডারি লট খুলুন।</span>
                 </div>
               )}
             </div>
@@ -532,15 +584,15 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         </div>
 
         {/* Slot Registration & Batch Generator Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <PlusCircle className="h-6 w-6 text-indigo-600" />
-                Slot Registration &amp; Batch Generator
+                পার্কিং স্লট তৈরি ও ব্যাচ জেনারেটর (Slot Creator)
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Register new parking slots for Motorcycles (Mxx), Cars (Cxx), Buses (Bxx), or Other (Oxx) into the university database.
+                মোটরসাইকেল (Mxx), কার (Cxx), বাস (Bxx) এর জন্য নতুন স্লট তৈরি করুন অথবা এক ক্লিকে ৫-৫০টি স্লট স্বয়ংক্রিয়ভাবে জেনারেট করুন।
               </p>
             </div>
 
@@ -555,7 +607,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Batch Auto-Generator
+                ব্যাচ অটো-জেনারেটর (Batch)
               </button>
               <button
                 type="button"
@@ -566,7 +618,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Single Custom Slot
+                একটি সিঙ্গেল স্লট (Single)
               </button>
             </div>
           </div>
@@ -575,7 +627,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
             {/* Target Lot Selector */}
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
-                Target Parking Lot
+                টার্গেট পার্কিং লট (Target Lot)
               </label>
               <select
                 value={regAreaId}
@@ -593,7 +645,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
             {/* Vehicle Category Selector */}
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
-                Vehicle Category
+                গাড়ির ক্যাটাগরি (Vehicle Category)
               </label>
               <select
                 value={regCategoryId}
@@ -602,7 +654,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} (Prefix: {c.codePrefix}xx)
+                    {c.name === "BIKE" ? "Motorcycle" : c.name} (সিরিয়াল: {c.codePrefix}xx)
                   </option>
                 ))}
               </select>
@@ -613,7 +665,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               <>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
-                    Slots Quantity
+                    স্লটের পরিমাণ (Quantity)
                   </label>
                   <input
                     type="number"
@@ -624,7 +676,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Auto-formats as {selectedCategoryObj?.codePrefix || "C"}01, {selectedCategoryObj?.codePrefix || "C"}02...
+                    অটোমেটিক {selectedCategoryObj?.codePrefix || "C"}01, {selectedCategoryObj?.codePrefix || "C"}02 নামে তৈরি হবে
                   </span>
                 </div>
 
@@ -634,7 +686,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     disabled={isSubmittingSlot}
                     className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow transition-colors disabled:opacity-50"
                   >
-                    {isSubmittingSlot ? "Generating..." : "Generate Batch Slots"}
+                    {isSubmittingSlot ? "তৈরি হচ্ছে..." : "ব্যাচ স্লট জেনারেট করুন"}
                   </button>
                 </div>
               </>
@@ -642,7 +694,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               <>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
-                    Slot Identifier
+                    স্লট কোড (Slot Identifier)
                   </label>
                   <input
                     type="text"
@@ -652,7 +704,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     placeholder={`e.g. ${selectedCategoryObj?.codePrefix || "C"}15`}
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Custom alphanumeric slot identifier
+                    কাস্টম আলফানামেরিক স্লট কোড লিখুন
                   </span>
                 </div>
 
@@ -662,7 +714,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     disabled={isSubmittingSlot || !singleSlotNumber.trim()}
                     className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow transition-colors disabled:opacity-50"
                   >
-                    {isSubmittingSlot ? "Registering..." : "Register Single Slot"}
+                    {isSubmittingSlot ? "রেজিস্টার হচ্ছে..." : "একটি স্লট রেজিস্টার করুন"}
                   </button>
                 </div>
               </>
@@ -671,15 +723,15 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         </div>
 
         {/* Registered Slots Interactive Grid & Filter */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <Layers className="h-5 w-5 text-indigo-600" />
-                Live Slot Inventory ({filteredSlots.length} Slots)
+                লাইভ স্লট ইনভেন্টরি ও ম্যাপ ({filteredSlots.length} Slots)
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                View real-time slots by vehicle category, monitor status, or toggle maintenance mode.
+                ক্যাম্পাসের প্রতিটি স্লটের বর্তমান অবস্থা দেখুন এবং প্রয়োজনে রক্ষণাবেক্ষণ (Maintenance) বন্ধ/চালু করুন।
               </p>
             </div>
 
@@ -706,7 +758,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     selectedCategoryFilter === "ALL" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
-                  All
+                  সব
                 </button>
                 <button
                   type="button"
@@ -715,7 +767,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     selectedCategoryFilter === "CAR" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
-                  <Car className="h-3 w-3" /> Car
+                  <Car className="h-3 w-3" /> কার
                 </button>
                 <button
                   type="button"
@@ -724,7 +776,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     selectedCategoryFilter === "BIKE" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
-                  <Bike className="h-3 w-3" /> Motorcycle (2-Side Lane)
+                  <Bike className="h-3 w-3" /> মোটরসাইকেল
                 </button>
                 <button
                   type="button"
@@ -733,7 +785,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     selectedCategoryFilter === "BUS" ? "bg-white text-purple-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
-                  <Bus className="h-3 w-3" /> Bus
+                  <Bus className="h-3 w-3" /> বাস
                 </button>
               </div>
 
@@ -744,7 +796,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                   if (selectedAreaId) loadSlots(selectedAreaId);
                 }}
                 className="h-8 w-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-colors"
-                title="Refresh Inventory"
+                title="রিফ্রেশ করুন"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
@@ -755,21 +807,21 @@ export default function AdminPortal({ user }: AdminPortalProps) {
           {isLoading ? (
             <div className="py-12 text-center text-slate-500 text-sm">
               <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-indigo-600" />
-              Loading slots from TiDB Cloud...
+              TiDB ক্লাউড থেকে স্লট ডাটা লোড হচ্ছে...
             </div>
           ) : filteredSlots.length === 0 ? (
             <div className="py-12 text-center text-slate-500 text-sm">
-              No slots registered for the selected filter. Use the registration form above to create slots.
+              এই ফিল্টারে কোনো স্লট রেজিস্টার করা নেই। উপরের ফর্ম ব্যবহার করে স্লট যোগ করুন।
             </div>
           ) : selectedCategoryFilter === "BIKE" && motorcycleSlots.length > 0 ? (
-            /* Special Two-Sided Motorcycle Bay Architecture (Field Visit Report Specification) */
+            /* Special Two-Sided Motorcycle Bay Architecture */
             <div className="mt-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="mb-4 text-center">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full inline-block">
-                  🏍️ Two-Sided Serial Motorcycle Bay System
+                  🏍️ ২-পাশের মোটরসাইকেল বে আর্কিটেকচার (Two-Sided Bay)
                 </span>
                 <p className="text-xs text-slate-500 mt-1">
-                  Serial-allocated parking on Side A and Side B with an unobstructed central driveway for easy maneuvering and exit.
+                  মাঝখানে ফাঁকা রাস্তা রাখা হয়েছে যাতে বাইক সহজে বের হতে পারে এবং ব্লকেজ তৈরি না হয়।
                 </p>
               </div>
 
@@ -777,7 +829,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 {/* Side A */}
                 <div className="lg:col-span-3 space-y-3">
                   <div className="bg-emerald-600 text-white font-bold text-xs py-2 px-3 rounded-xl text-center shadow-2xs">
-                    SIDE A (Serial Bays)
+                    SIDE A (বাম পাশের স্লট)
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {sideASlots.map((slot) => renderSlotAdminCard(slot))}
@@ -785,20 +837,20 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 </div>
 
                 {/* Central Driveway */}
-                <div className="lg:col-span-1 bg-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center text-white border-2 border-dashed border-amber-400/80 shadow-inner min-h-[160px]">
+                <div className="lg:col-span-1 bg-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center text-center text-white border-2 border-dashed border-amber-400/80 shadow-inner min-h-[160px]">
                   <Navigation className="h-6 w-6 text-amber-400 animate-bounce mb-2" />
                   <span className="text-[11px] font-black uppercase tracking-widest text-amber-300 block">
-                    Central Driveway
+                    Central Road
                   </span>
                   <span className="text-[9px] text-slate-300 mt-1 leading-tight font-medium">
-                    Empty Maneuvering Passage (Free Entry / Exit Lane ➡️)
+                    মাঝখানের খোলা রাস্তা (সহজ এন্ট্রি ও এক্সিট লেন ➡️)
                   </span>
                 </div>
 
                 {/* Side B */}
                 <div className="lg:col-span-3 space-y-3">
                   <div className="bg-emerald-600 text-white font-bold text-xs py-2 px-3 rounded-xl text-center shadow-2xs">
-                    SIDE B (Serial Bays)
+                    SIDE B (ডান পাশের স্লট)
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {sideBSlots.map((slot) => renderSlotAdminCard(slot))}
@@ -815,15 +867,15 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         </div>
 
         {/* Expiry Engine Scheduler Box */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <Clock className="h-6 w-6 text-indigo-600" />
-                Automated Expiry Scheduler
+                ১৫-মিনিট অটোমেটেড এক্সপায়ারি চেকার (Automated Expiry Engine)
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Runs idempotent background job to transition overdue grace reservations to NO_SHOW, and overdue parking vehicles to EXPIRED_AWAITING_EXIT (retaining slots in OCCUPIED until physical exit).
+                যেসব ড্রাইভার বুক করার ১৫ মিনিটের মধ্যে গেটে আসেনি, এই ইঞ্জিন তাদের রিজার্ভেশন নো-শো (`NO_SHOW`) হিসেবে বাতিল করে স্লট তাৎক্ষণিক মুক্ত করে।
               </p>
             </div>
 
@@ -834,16 +886,16 @@ export default function AdminPortal({ user }: AdminPortalProps) {
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50"
             >
               <Play className="h-4 w-4" />
-              {isRunningExpiry ? "Processing Job..." : "Trigger Expiry Check Now"}
+              {isRunningExpiry ? "প্রসেস হচ্ছে..." : "এখনই এক্সপায়ারি চেক চালান"}
             </button>
           </div>
 
           {expiryResult && (
             <div className="mt-4 p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between">
               <div>
-                <strong>Job Run Completed at {new Date(expiryResult.timestamp).toLocaleTimeString()}:</strong>
+                <strong>চেক সম্পন্ন হয়েছে {new Date(expiryResult.timestamp).toLocaleTimeString()}-এ:</strong>
                 <span className="ml-2">
-                  No-Shows: {expiryResult.noShowsProcessed} • Overstays Flagged: {expiryResult.overstaysProcessed} • Slots Safely Freed: {expiryResult.slotsFreed}
+                  নো-শো বাতিল: {expiryResult.noShowsProcessed} • ওভারস্টে চিহ্নিত: {expiryResult.overstaysProcessed} • মুক্ত করা স্লট: {expiryResult.slotsFreed}
                 </span>
               </div>
               <CheckCircle2 className="h-5 w-5 text-indigo-600 flex-shrink-0" />
@@ -852,23 +904,23 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         </div>
 
         {/* Vehicle Category Duration Policies */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
           <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
             <Clock className="h-5 w-5 text-amber-600" />
-            Vehicle Category Duration Policies
+            গাড়ির ক্যাটাগরিভিত্তিক পার্কিং সময়সীমা পলিসি (Duration Policies)
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {categories.map((c) => (
-              <div key={c.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+              <div key={c.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50">
                 <div className="flex items-center gap-2 mb-2 font-bold text-slate-900">
                   {c.name === "CAR" && <Car className="h-4 w-4 text-blue-600" />}
                   {c.name === "BIKE" && <Bike className="h-4 w-4 text-emerald-600" />}
                   {c.name === "BUS" && <Bus className="h-4 w-4 text-purple-600" />}
-                  <span>{c.name} ({c.codePrefix}xx)</span>
+                  <span>{c.name === "BIKE" ? "Motorcycle" : c.name} ({c.codePrefix}xx)</span>
                 </div>
                 <div className="text-xs text-slate-600 space-y-1">
-                  <div>Arrival Grace: <strong>{c.durationPolicy?.arrivalGraceMinutes || 15} mins</strong></div>
-                  <div>Max Parking: <strong>{c.durationPolicy?.parkingDurationMinutes || 15} mins</strong></div>
+                  <div>গেটে পৌঁছানোর সময়: <strong>{c.durationPolicy?.arrivalGraceMinutes || 15} মিনিট</strong></div>
+                  <div>সর্বোচ্চ পার্কিং সময়: <strong>{c.durationPolicy?.parkingDurationMinutes || 15} মিনিট</strong></div>
                 </div>
               </div>
             ))}
