@@ -23,7 +23,7 @@ function SignInContent() {
   async function handleCredentialsSignIn(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!email.trim()) {
-      setErrorMsg("অনুগ্রহ করে আপনার বিশ্ববিদ্যালয়ের ইমেইল ঠিকানা দিন।");
+      setErrorMsg("Please enter your university email address.");
       return;
     }
 
@@ -46,7 +46,7 @@ function SignInContent() {
         router.refresh();
       }
     } catch {
-      setErrorMsg("লগইন করার সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে।");
+      setErrorMsg("An unexpected error occurred during sign-in.");
     } finally {
       setLoadingRole(null);
     }
@@ -71,7 +71,7 @@ function SignInContent() {
         router.refresh();
       }
     } catch {
-      setErrorMsg("লগইন করার সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে।");
+      setErrorMsg("An unexpected error occurred during sign-in.");
     } finally {
       setLoadingRole(null);
     }
@@ -85,7 +85,7 @@ function SignInContent() {
         className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 mb-6 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        হোমপেজে ফিরে যান (Back to Homepage)
+        Back to Homepage
       </Link>
 
       {/* Main Card */}
@@ -94,7 +94,7 @@ function SignInContent() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white font-black text-2xl shadow-sm mb-3">
             P
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">UniParking লগইন পোর্টাল</h1>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">UniParking Authentication</h1>
           <p className="text-xs text-slate-500 mt-1">Smart University Parking Management &amp; Reservation Platform</p>
         </div>
 
@@ -106,10 +106,10 @@ function SignInContent() {
           </div>
         )}
 
-        {/* 1-CLICK FAST PORTAL ACCESS (২টি প্রধান অপশন) */}
+        {/* 1-CLICK FAST PORTAL ACCESS */}
         <div className="mb-6">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-3 text-center">
-            সরাসরি প্রবেশ করুন (1-Click Instant Access)
+            Instant 1-Click Role Access
           </span>
 
           <div className="space-y-3">
@@ -125,13 +125,13 @@ function SignInContent() {
                   🎓
                 </div>
                 <div>
-                  <div className="font-black text-slate-900 text-sm">শিক্ষার্থী ও শিক্ষক পোর্টাল</div>
-                  <div className="text-xs text-slate-500">Student &amp; Faculty Booking</div>
+                  <div className="font-black text-slate-900 text-sm">Student &amp; Faculty Portal</div>
+                  <div className="text-xs text-slate-500">driver@university.edu</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-600 text-white">
-                  প্রবেশ ➔
+                  Enter ➔
                 </span>
                 {loadingRole === "DRIVER" && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
               </div>
@@ -149,13 +149,13 @@ function SignInContent() {
                   🛡️
                 </div>
                 <div>
-                  <div className="font-black text-slate-900 text-sm">অ্যাডমিন ম্যানেজমেন্ট কনসোল</div>
-                  <div className="text-xs text-slate-500">Campus Admin Control</div>
+                  <div className="font-black text-slate-900 text-sm">Campus Admin Console</div>
+                  <div className="text-xs text-slate-500">admin@university.edu</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-indigo-600 text-white">
-                  প্রবেশ ➔
+                  Enter ➔
                 </span>
                 {loadingRole === "ADMIN" && <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />}
               </div>
@@ -173,13 +173,13 @@ function SignInContent() {
                   🚪
                 </div>
                 <div>
-                  <div className="font-bold text-slate-900 text-xs">গেট সিকিউরিটি ও স্টাফ পোর্টাল</div>
-                  <div className="text-[11px] text-slate-500">Gate Verification Staff</div>
+                  <div className="font-bold text-slate-900 text-xs">Gate Attendant Staff Portal</div>
+                  <div className="text-[11px] text-slate-500">attendant@university.edu</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-bold text-emerald-700">
-                  গেট স্টাফ ➔
+                  Gate Staff ➔
                 </span>
                 {loadingRole === "ATTENDANT" && <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />}
               </div>
@@ -194,7 +194,7 @@ function SignInContent() {
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-white px-3 text-slate-400 font-bold tracking-wider text-[10px]">
-              অথবা কাস্টম ইমেইল দিয়ে লগইন করুন
+              Or Sign In With Custom University Account
             </span>
           </div>
         </div>
@@ -203,7 +203,7 @@ function SignInContent() {
         <form onSubmit={handleCredentialsSignIn} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              বিশ্ববিদ্যালয়ের ইমেইল ঠিকানা (University Email)
+              University Email / Student ID
             </label>
             <div className="relative">
               <Mail className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
@@ -219,7 +219,7 @@ function SignInContent() {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              পাসওয়ার্ড (Password)
+              Password
             </label>
             <div className="relative">
               <Lock className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
@@ -235,16 +235,16 @@ function SignInContent() {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              পোর্টাল রোল (Role)
+              Portal Role
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
               className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-sm font-semibold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
             >
-              <option value="DRIVER">Student / Faculty Driver (শিক্ষার্থী ও শিক্ষক)</option>
-              <option value="ADMIN">Campus Administrator (বিশ্ববিদ্যালয় অ্যাডমিন)</option>
-              <option value="ATTENDANT">Parking Gate Attendant (গেট সিকিউরিটি স্টাফ)</option>
+              <option value="DRIVER">Student / Faculty Driver</option>
+              <option value="ADMIN">Campus Administrator</option>
+              <option value="ATTENDANT">Parking Gate Attendant</option>
             </select>
           </div>
 
@@ -256,10 +256,10 @@ function SignInContent() {
             {loadingRole === "credentials" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>লগইন হচ্ছে...</span>
+                <span>Signing In...</span>
               </>
             ) : (
-              <span>ইমেইল দিয়ে লগইন করুন</span>
+              <span>Sign In with Credentials</span>
             )}
           </button>
         </form>
@@ -275,7 +275,7 @@ export default function SignInPage() {
         fallback={
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-            পোর্টাল লোড হচ্ছে...
+            Loading portal...
           </div>
         }
       >
