@@ -301,15 +301,20 @@ export default function AdminPortal({ user }: AdminPortalProps) {
 
   const selectedCategoryObj = categories.find((c) => c.id === regCategoryId);
 
+  const isMotorcycle = (name?: string) => name === "MOTORCYCLE" || name === "BIKE";
+
   // Filter slots for table/grid
   const filteredSlots = useMemo(() => {
     if (selectedCategoryFilter === "ALL") return slots;
+    if (isMotorcycle(selectedCategoryFilter)) {
+      return slots.filter((s) => isMotorcycle(s.category.name));
+    }
     return slots.filter((s) => s.category.name === selectedCategoryFilter);
   }, [slots, selectedCategoryFilter]);
 
   // Motorcycle two-sided layout calculations
   const motorcycleSlots = useMemo(() => {
-    return slots.filter((s) => s.category.name === "BIKE");
+    return slots.filter((s) => isMotorcycle(s.category.name));
   }, [slots]);
 
   const { sideASlots, sideBSlots } = useMemo(() => {
@@ -364,9 +369,9 @@ export default function AdminPortal({ user }: AdminPortalProps) {
 
         <div className="text-[11px] font-semibold text-slate-600 mt-0.5 flex items-center justify-center gap-1">
           {slot.category.name === "CAR" && <Car className="h-3 w-3 text-blue-600" />}
-          {slot.category.name === "BIKE" && <Bike className="h-3 w-3 text-emerald-600" />}
+          {isMotorcycle(slot.category.name) && <Bike className="h-3 w-3 text-emerald-600" />}
           {slot.category.name === "BUS" && <Bus className="h-3 w-3 text-purple-600" />}
-          <span>{slot.category.name === "BIKE" ? "Motorcycle" : slot.category.name}</span>
+          <span>{isMotorcycle(slot.category.name) ? "Motorcycle" : slot.category.name}</span>
         </div>
 
         <div
@@ -772,9 +777,9 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedCategoryFilter("BIKE")}
+                  onClick={() => setSelectedCategoryFilter("MOTORCYCLE")}
                   className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
-                    selectedCategoryFilter === "BIKE" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
+                    isMotorcycle(selectedCategoryFilter) ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
                   <Bike className="h-3 w-3" /> Motorcycle
@@ -814,7 +819,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
             <div className="py-12 text-center text-slate-500 text-sm">
               No slots registered for the selected filter. Use the registration form above to create slots.
             </div>
-          ) : selectedCategoryFilter === "BIKE" && motorcycleSlots.length > 0 ? (
+          ) : isMotorcycle(selectedCategoryFilter) && motorcycleSlots.length > 0 ? (
             /* Special Two-Sided Motorcycle Bay Architecture */
             <div className="mt-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="mb-4 text-center">

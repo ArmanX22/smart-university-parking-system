@@ -13,22 +13,32 @@ export default async function DriverDashboardPage() {
     include: { category: true },
   });
 
-  if (vehicles.length === 0) {
-    // Auto-register a default vehicle for demo driver
-    const carCategory = await prisma.vehicleCategory.findFirst({
-      where: { name: "CAR" },
-    });
+  // Ensure driver has demo vehicles for all active categories (Car, Motorcycle, Bus)
+  const activeCategories = await prisma.vehicleCategory.findMany({
+    where: { name: { in: ["CAR", "MOTORCYCLE", "BIKE", "BUS"] } },
+  });
 
-    if (carCategory) {
+  for (const cat of activeCategories) {
+    const hasVehicle = vehicles.some(
+      (v) =>
+        v.categoryId === cat.id ||
+        v.category.name === cat.name ||
+        ((cat.name === "MOTORCYCLE" || cat.name === "BIKE") &&
+          (v.category.name === "MOTORCYCLE" || v.category.name === "BIKE"))
+    );
+
+    if (!hasVehicle) {
+      const isMoto = cat.name === "MOTORCYCLE" || cat.name === "BIKE";
+      const code = isMoto ? "MTR" : cat.name;
       const newVehicle = await prisma.vehicle.create({
         data: {
           userId: user.id,
-          categoryId: carCategory.id,
-          licensePlate: `UNI-${user.id.slice(-4).toUpperCase()}-CAR`,
+          categoryId: cat.id,
+          licensePlate: `UNI-${user.id.slice(-4).toUpperCase()}-${code}`,
         },
         include: { category: true },
       });
-      vehicles = [newVehicle];
+      vehicles.push(newVehicle);
     }
   }
 

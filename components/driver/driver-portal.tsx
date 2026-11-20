@@ -115,7 +115,11 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
         const areaList = data.areas || data.data || [];
         setAreas(areaList);
         if (areaList.length > 0) {
-          setSelectedAreaId((prev) => prev || areaList[0].id);
+          const preferred =
+            areaList.find((a: any) => a.code === "NORTH-LOT") ||
+            areaList.find((a: any) => (a.totalSlots || 0) > 0) ||
+            areaList[0];
+          setSelectedAreaId((prev) => prev || preferred.id);
         }
       }
     } catch {
@@ -175,22 +179,29 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const selectedArea = areas.find((a) => a.id === selectedAreaId);
 
+  const isMotorcycle = (name?: string) => name === "MOTORCYCLE" || name === "BIKE";
+
   // Sync category filter with selected vehicle if vehicle changes
   useEffect(() => {
     if (selectedVehicle?.category.name) {
-      setCategoryFilter(selectedVehicle.category.name);
+      setCategoryFilter(
+        isMotorcycle(selectedVehicle.category.name) ? "MOTORCYCLE" : selectedVehicle.category.name
+      );
     }
   }, [selectedVehicle]);
 
   // Filter slots
   const filteredSlots = useMemo(() => {
     if (categoryFilter === "ALL") return slots;
+    if (isMotorcycle(categoryFilter)) {
+      return slots.filter((s) => isMotorcycle(s.category.name));
+    }
     return slots.filter((s) => s.category.name === categoryFilter);
   }, [slots, categoryFilter]);
 
   // Two-Sided Motorcycle Slots Calculation (Field Visit Specification)
   const motorcycleSlots = useMemo(() => {
-    return slots.filter((s) => s.category.name === "BIKE");
+    return slots.filter((s) => isMotorcycle(s.category.name));
   }, [slots]);
 
   const { sideASlots, sideBSlots } = useMemo(() => {
@@ -214,9 +225,35 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
 
   // Handle Slot Booking
   async function handleBookSlot(slotId: string) {
-    if (!selectedVehicleId) {
-      setStatusMessage({ type: "error", text: "Please select a vehicle before reserving a slot." });
-      return;
+    const targetSlot = slots.find((s) => s.id === slotId);
+    if (!targetSlot) return;
+
+    // Find the best matching vehicle for the slot's category
+    let vehicleIdToBook = selectedVehicleId;
+    const currentVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+    const isSlotMoto = isMotorcycle(targetSlot.category.name);
+    const isCurrentMoto = isMotorcycle(currentVehicle?.category.name);
+
+    if (
+      !currentVehicle ||
+      (isSlotMoto ? !isCurrentMoto : currentVehicle.category.name !== targetSlot.category.name)
+    ) {
+      // Auto-switch to matching vehicle if driver owns one
+      const matchingVehicle = vehicles.find((v) =>
+        isSlotMoto ? isMotorcycle(v.category.name) : v.category.name === targetSlot.category.name
+      );
+      if (matchingVehicle) {
+        vehicleIdToBook = matchingVehicle.id;
+        setSelectedVehicleId(matchingVehicle.id);
+      } else {
+        setStatusMessage({
+          type: "error",
+          text: `You need a registered ${
+            isSlotMoto ? "Motorcycle" : targetSlot.category.name
+          } to reserve slot ${targetSlot.slotNumber}.`,
+        });
+        return;
+      }
     }
 
     try {
@@ -228,7 +265,7 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slotId,
-          vehicleId: selectedVehicleId,
+          vehicleId: vehicleIdToBook,
         }),
       });
 
@@ -353,9 +390,9 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
 
           <div className="text-xs text-slate-600 mb-3 flex items-center justify-center gap-1 font-medium">
             {slot.category.name === "CAR" && <Car className="h-3.5 w-3.5 text-blue-600" />}
-            {slot.category.name === "BIKE" && <Bike className="h-3.5 w-3.5 text-emerald-600" />}
+            {isMotorcycle(slot.category.name) && <Bike className="h-3.5 w-3.5 text-emerald-600" />}
             {slot.category.name === "BUS" && <Bus className="h-3.5 w-3.5 text-purple-600" />}
-            <span>{slot.category.name === "BIKE" ? "Motorcycle" : slot.category.name}</span>
+            <span>{isMotorcycle(slot.category.name) ? "Motorcycle" : slot.category.name}</span>
           </div>
         </div>
 
@@ -712,9 +749,9 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
               </button>
               <button
                 type="button"
-                onClick={() => setCategoryFilter("BIKE")}
+                onClick={() => setCategoryFilter("MOTORCYCLE")}
                 className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-                  categoryFilter === "BIKE" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
+                  isMotorcycle(categoryFilter) ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
                 }`}
               >
                 <Bike className="h-3.5 w-3.5" /> Motorcycle (2-Side Lane)
@@ -756,7 +793,7 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
             <div className="py-16 text-center text-slate-500 text-sm">
               No slots configured in this area for category &quot;{categoryFilter}&quot;.
             </div>
-          ) : categoryFilter === "BIKE" && motorcycleSlots.length > 0 ? (
+          ) : isMotorcycle(categoryFilter) && motorcycleSlots.length > 0 ? (
             /* SPECIAL TWO-SIDED MOTORCYCLE PARKING SYSTEM WITH CENTRAL PASSAGE */
             <div className="mt-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="mb-4 text-center">

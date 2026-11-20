@@ -202,15 +202,20 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
 
   const activeLot = areas.find((a) => a.id === currentAreaId);
 
+  const isMotorcycle = (name?: string) => name === "MOTORCYCLE" || name === "BIKE";
+
   // Filter slots
   const filteredSlots = useMemo(() => {
     if (categoryFilter === "ALL") return slots;
+    if (isMotorcycle(categoryFilter)) {
+      return slots.filter((s) => isMotorcycle(s.category.name));
+    }
     return slots.filter((s) => s.category.name === categoryFilter);
   }, [slots, categoryFilter]);
 
   // Two-Sided Motorcycle Slots
   const motorcycleSlots = useMemo(() => {
-    return slots.filter((s) => s.category.name === "BIKE");
+    return slots.filter((s) => isMotorcycle(s.category.name));
   }, [slots]);
 
   const { sideASlots, sideBSlots } = useMemo(() => {
@@ -263,9 +268,9 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
         </div>
         <div className="text-[10px] text-slate-500 mt-0.5 flex items-center justify-center gap-1 font-semibold">
           {slot.category.name === "CAR" && <Car className="h-3 w-3 text-blue-600" />}
-          {slot.category.name === "BIKE" && <Bike className="h-3 w-3 text-emerald-600" />}
+          {isMotorcycle(slot.category.name) && <Bike className="h-3 w-3 text-emerald-600" />}
           {slot.category.name === "BUS" && <Bus className="h-3 w-3 text-purple-600" />}
-          <span>{slot.category.name}</span>
+          <span>{isMotorcycle(slot.category.name) ? "Motorcycle" : slot.category.name}</span>
         </div>
         <div
           className={`mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
@@ -500,9 +505,9 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCategoryFilter("BIKE")}
+                  onClick={() => setCategoryFilter("MOTORCYCLE")}
                   className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
-                    categoryFilter === "BIKE" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
+                    isMotorcycle(categoryFilter) ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
                   <Bike className="h-3 w-3" /> Motorcycle (2-Side Lane)
@@ -535,7 +540,7 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
             </div>
           ) : filteredSlots.length === 0 ? (
             <div className="py-16 text-center text-slate-500 text-sm">No slots in this lot for &quot;{categoryFilter}&quot;.</div>
-          ) : categoryFilter === "BIKE" && motorcycleSlots.length > 0 ? (
+          ) : isMotorcycle(categoryFilter) && motorcycleSlots.length > 0 ? (
             /* Special Two-Sided Motorcycle View for Attendants */
             <div className="mt-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="mb-4 text-center">
