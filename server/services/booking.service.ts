@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { SlotStatus, BookingStatus } from "@prisma/client";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/errors/api-error";
 import { WaitingListService } from "./waiting-list.service";
+import { SseService } from "./sse.service";
 
 export class BookingService {
   /**
@@ -15,7 +16,7 @@ export class BookingService {
     slotId: string;
     vehicleId: string;
   }) {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Atomic Conditional Lock: Reserve slot ONLY if currently AVAILABLE
       const slotLock = await tx.parkingSlot.updateMany({
         where: {
@@ -151,13 +152,35 @@ export class BookingService {
 
       return booking;
     });
+
+    // Real-time SSE Broadcast
+    try {
+      SseService.broadcastSlotUpdate({
+        slotId: result.slotId,
+        areaId: result.slot.areaId,
+        slotNumber: result.slot.slotNumber,
+        status: "RESERVED",
+        category: result.slot.category.name,
+      });
+      SseService.broadcastBookingUpdate({
+        bookingId: result.id,
+        slotId: result.slotId,
+        status: result.status,
+        slotNumber: result.slot.slotNumber,
+        vehiclePlate: result.vehicle.licensePlate,
+      });
+    } catch {
+      // quiet fail
+    }
+
+    return result;
   }
 
   /**
    * Cancel booking by driver (allowed only during PENDING_ARRIVAL).
    */
   static async cancelBooking(data: { userId: string; bookingId: string; reason?: string }) {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: data.bookingId },
         include: { slot: true },
@@ -202,8 +225,28 @@ export class BookingService {
         },
       });
 
-      return updatedBooking;
+      return { updatedBooking, booking };
     });
+
+    try {
+      SseService.broadcastSlotUpdate({
+        slotId: result.booking.slotId,
+        areaId: result.booking.slot.areaId,
+        slotNumber: result.booking.slot.slotNumber,
+        status: "AVAILABLE",
+        category: result.booking.slot.categoryId,
+      });
+      SseService.broadcastBookingUpdate({
+        bookingId: result.updatedBooking.id,
+        slotId: result.booking.slotId,
+        status: "CANCELLED",
+        slotNumber: result.booking.slot.slotNumber,
+      });
+    } catch {
+      // quiet fail
+    }
+
+    return result.updatedBooking;
   }
 
   /**
@@ -216,7 +259,7 @@ export class BookingService {
     bookingCode: string;
     qrSecret?: string;
   }) {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { bookingCode: data.bookingCode.toUpperCase() },
         include: { slot: { include: { area: true, category: true } }, vehicle: true },
@@ -306,6 +349,29 @@ export class BookingService {
 
       return { booking: updatedBooking, alreadyActive: false };
     });
+
+    try {
+      if (!result.alreadyActive && result.booking) {
+        SseService.broadcastSlotUpdate({
+          slotId: result.booking.slotId,
+          areaId: result.booking.slot?.areaId || "",
+          slotNumber: result.booking.slot?.slotNumber || "",
+          status: "OCCUPIED",
+          category: result.booking.slot?.categoryId || "",
+        });
+        SseService.broadcastBookingUpdate({
+          bookingId: result.booking.id,
+          slotId: result.booking.slotId,
+          status: "ACTIVE",
+          slotNumber: result.booking.slot?.slotNumber || "",
+          vehiclePlate: result.booking.vehicle?.licensePlate,
+        });
+      }
+    } catch {
+      // quiet fail
+    }
+
+    return result;
   }
 
   /**
@@ -318,7 +384,7 @@ export class BookingService {
     bookingCode: string;
     qrSecret?: string;
   }) {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { bookingCode: data.bookingCode.toUpperCase() },
         include: { slot: { include: { area: true, category: true } }, vehicle: true },
@@ -386,6 +452,29 @@ export class BookingService {
         reallocatedToWaitingUser: !!allocatedNext,
       };
     });
+
+    try {
+      if (!result.alreadyCompleted && result.booking) {
+        SseService.broadcastSlotUpdate({
+          slotId: result.booking.slotId,
+          areaId: result.booking.slot?.areaId || "",
+          slotNumber: result.booking.slot?.slotNumber || "",
+          status: "AVAILABLE",
+          category: result.booking.slot?.categoryId || "",
+        });
+        SseService.broadcastBookingUpdate({
+          bookingId: result.booking.id,
+          slotId: result.booking.slotId,
+          status: "COMPLETED",
+          slotNumber: result.booking.slot?.slotNumber || "",
+          vehiclePlate: result.booking.vehicle?.licensePlate,
+        });
+      }
+    } catch {
+      // quiet fail
+    }
+
+    return result;
   }
 
   /**
@@ -414,6 +503,28 @@ export class BookingService {
     if (!booking) return null;
 
     const now = Date.now();
+
+    // 15-Minute Grace Period Expiry Check:
+    // If user failed to arrive before arrivalExpiresAt, auto-cancel immediately and release slot
+    if (booking.status === BookingStatus.PENDING_ARRIVAL && booking.arrivalExpiresAt.getTime() <= now) {
+      await prisma.$transaction(async (tx) => {
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { status: BookingStatus.NO_SHOW },
+        });
+
+        // Release slot or assign to next waiting list user
+        await WaitingListService.allocateNext(
+          tx,
+          booking.slot.areaId,
+          booking.slot.categoryId,
+          booking.slotId
+        );
+      });
+
+      return null;
+    }
+
     let remainingArrivalSeconds = 0;
     let remainingParkingSeconds = 0;
 

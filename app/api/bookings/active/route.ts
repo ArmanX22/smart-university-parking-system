@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const user = await requireAuth();
     const active = await BookingService.getActiveBooking(user.id);
-    return Response.json({ success: true, data: active });
+    return Response.json({ success: true, data: active, booking: active });
   } catch (error) {
     return handleApiError(error);
   }

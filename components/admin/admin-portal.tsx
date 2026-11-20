@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Shield,
   Layers,
@@ -17,9 +17,13 @@ import {
   AlertCircle,
   Filter,
   Check,
+  Navigation,
+  ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { useParkingStream } from "@/hooks/use-parking-stream";
 
 interface AdminPortalProps {
   user: {
@@ -149,6 +153,24 @@ export default function AdminPortal({ user }: AdminPortalProps) {
     }
   }, [selectedAreaId, loadSlots]);
 
+  // Phase 8: Real-Time SSE Telemetry Stream with Polling Fallback
+  const { isConnected, isFallbackMode } = useParkingStream({
+    onSlotUpdate: (evt) => {
+      setSlots((prev) =>
+        prev.map((s) => (s.id === evt.slotId ? { ...s, status: evt.status } : s))
+      );
+      loadAreasAndCategories();
+    },
+    onBookingUpdate: () => {
+      loadAreasAndCategories();
+      if (selectedAreaId) loadSlots(selectedAreaId);
+    },
+    onPollFallback: () => {
+      loadAreasAndCategories();
+      if (selectedAreaId) loadSlots(selectedAreaId);
+    },
+  });
+
   // Handle Slot Registration (Batch or Single)
   async function handleRegisterSlots(e: React.FormEvent) {
     e.preventDefault();
@@ -272,10 +294,112 @@ export default function AdminPortal({ user }: AdminPortalProps) {
   const selectedCategoryObj = categories.find((c) => c.id === regCategoryId);
 
   // Filter slots for table/grid
-  const filteredSlots = slots.filter((s) => {
-    if (selectedCategoryFilter === "ALL") return true;
-    return s.category.name === selectedCategoryFilter;
-  });
+  const filteredSlots = useMemo(() => {
+    if (selectedCategoryFilter === "ALL") return slots;
+    return slots.filter((s) => s.category.name === selectedCategoryFilter);
+  }, [slots, selectedCategoryFilter]);
+
+  // Motorcycle two-sided layout calculations
+  const motorcycleSlots = useMemo(() => {
+    return slots.filter((s) => s.category.name === "BIKE");
+  }, [slots]);
+
+  const { sideASlots, sideBSlots } = useMemo(() => {
+    const sorted = [...motorcycleSlots].sort((a, b) =>
+      a.slotNumber.localeCompare(b.slotNumber, undefined, { numeric: true })
+    );
+
+    const a: SlotRecord[] = [];
+    const b: SlotRecord[] = [];
+
+    sorted.forEach((slot, index) => {
+      if (index % 2 === 0) {
+        a.push(slot);
+      } else {
+        b.push(slot);
+      }
+    });
+
+    return { sideASlots: a, sideBSlots: b };
+  }, [motorcycleSlots]);
+
+  // Bus Slots Analysis for Fulbaria Route
+  const busSlots = useMemo(() => {
+    return slots.filter((s) => s.category.name === "BUS");
+  }, [slots]);
+
+  const availableBusSlots = busSlots.filter((b) => b.status === "AVAILABLE");
+
+  // Render Slot Admin Card
+  const renderSlotAdminCard = (slot: SlotRecord) => {
+    const isAvailable = slot.status === "AVAILABLE";
+    const isReserved = slot.status === "RESERVED";
+    const isOccupied = slot.status === "OCCUPIED";
+    const isMaintenance = slot.status === "MAINTENANCE";
+
+    return (
+      <div
+        key={slot.id}
+        className={`rounded-xl border p-3.5 transition-all text-center relative ${
+          isAvailable
+            ? "border-emerald-300 bg-emerald-50/50"
+            : isReserved
+            ? "border-amber-300 bg-amber-50/40"
+            : isOccupied
+            ? "border-rose-200 bg-rose-50/40"
+            : "border-slate-300 bg-slate-100 opacity-70"
+        }`}
+      >
+        <div className="font-mono text-base font-black text-slate-900">
+          {slot.slotNumber}
+        </div>
+
+        <div className="text-[11px] font-semibold text-slate-600 mt-0.5 flex items-center justify-center gap-1">
+          {slot.category.name === "CAR" && <Car className="h-3 w-3 text-blue-600" />}
+          {slot.category.name === "BIKE" && <Bike className="h-3 w-3 text-emerald-600" />}
+          {slot.category.name === "BUS" && <Bus className="h-3 w-3 text-purple-600" />}
+          <span>{slot.category.name}</span>
+        </div>
+
+        <div
+          className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
+            isAvailable
+              ? "bg-emerald-100 text-emerald-800"
+              : isReserved
+              ? "bg-amber-100 text-amber-800"
+              : isOccupied
+              ? "bg-rose-100 text-rose-800"
+              : "bg-slate-200 text-slate-700"
+          }`}
+        >
+          {slot.status}
+        </div>
+
+        {/* Maintenance Toggle */}
+        <div className="mt-2 pt-2 border-t border-slate-200/60">
+          <button
+            type="button"
+            onClick={() => handleToggleStatus(slot.id, slot.status)}
+            disabled={isOccupied || isReserved}
+            title={
+              isMaintenance
+                ? "Re-enable slot to AVAILABLE"
+                : isOccupied || isReserved
+                ? "Cannot modify in-use slot"
+                : "Set slot to MAINTENANCE"
+            }
+            className={`w-full py-1 rounded text-[10px] font-semibold transition-colors ${
+              isMaintenance
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "bg-slate-200 hover:bg-slate-300 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            }`}
+          >
+            {isMaintenance ? "Restore" : "Maintenance"}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -293,14 +417,21 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                   Campus Admin
                 </span>
               </h1>
-              <span className="text-xs text-slate-500">Slot Inventory, Policies &amp; Expiry Engine</span>
+              <span className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    isConnected ? "bg-emerald-500 animate-pulse" : isFallbackMode ? "bg-amber-500" : "bg-slate-400"
+                  }`}
+                />
+                {isConnected ? "Real-Time Telemetry Active (SSE)" : "Polling Mode (10s)"}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <NotificationBell />
             <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs font-semibold text-slate-800">{user.name || "Administrator"}</span>
+              <span className="text-xs font-semibold text-slate-800">{user.name || "University Admin"}</span>
               <span className="text-[11px] text-slate-500">{user.email}</span>
             </div>
             <Link
@@ -314,9 +445,9 @@ export default function AdminPortal({ user }: AdminPortalProps) {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Container */}
       <main className="container mx-auto px-4 sm:px-8 py-8 flex-1 max-w-6xl">
-        {/* Status Toast Alert */}
+        {/* Status Feedback Banner */}
         {statusMessage && (
           <div
             className={`mb-6 p-4 rounded-xl flex items-center justify-between shadow-sm border ${
@@ -342,35 +473,66 @@ export default function AdminPortal({ user }: AdminPortalProps) {
           </div>
         )}
 
-        {/* KPI Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        {/* Global KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Total Campus Lots</span>
-            <div className="text-3xl font-black text-slate-900 mt-2">{areas.length} Areas</div>
-            <span className="text-xs text-slate-500 mt-1 block">Live in TiDB</span>
+            <div className="text-3xl font-black text-slate-900 mt-1">{areas.length}</div>
+            <span className="text-xs text-slate-400 font-medium">Configured parking zones</span>
           </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Total Capacity</span>
-            <div className="text-3xl font-black text-slate-900 mt-2">{totalSlots} Slots</div>
-            <span className="text-xs text-slate-500 mt-1 block">Across all lots</span>
+            <div className="text-3xl font-black text-slate-900 mt-1">{totalSlots}</div>
+            <span className="text-xs text-slate-400 font-medium">Slots across all lots</span>
           </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Available Now</span>
-            <div className="text-3xl font-black text-emerald-600 mt-2">{availableSlots} Free</div>
-            <span className="text-xs text-emerald-600 font-medium mt-1 block">Ready for driver booking</span>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 block">Available Slots</span>
+            <div className="text-3xl font-black text-emerald-700 mt-1">{availableSlots}</div>
+            <span className="text-xs text-emerald-600 font-medium">Ready for reservation</span>
           </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Occupied / Reserved</span>
-            <div className="text-3xl font-black text-blue-600 mt-2">{occupiedSlots} In-Use</div>
-            <span className="text-xs text-blue-600 font-medium mt-1 block">Physical or active hold</span>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-600 block">Occupied / Active</span>
+            <div className="text-3xl font-black text-rose-700 mt-1">{occupiedSlots}</div>
+            <span className="text-xs text-rose-600 font-medium">Vehicles physically parked</span>
           </div>
         </div>
 
-        {/* 🌟 SLOT REGISTRATION FEATURE (CAR, MOTORCYCLE, BUS, OTHER) 🌟 */}
-        <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-md p-6 sm:p-8 mb-8">
+        {/* Fulbaria Route Bus Planner & Capacity Management Card (Field Visit Report Specification) */}
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white mb-8 shadow-sm border border-purple-800/40">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-200 text-xs font-semibold mb-2 border border-purple-400/20">
+                <Bus className="h-3.5 w-3.5 text-purple-300" />
+                <span>Upcoming Fulbaria Route Bus • Advance Capacity Planning</span>
+              </div>
+              <h2 className="text-xl font-black tracking-tight text-white">Fulbaria Campus Shuttle Bay Management</h2>
+              <p className="text-xs text-purple-200 mt-1 leading-relaxed">
+                As required by the university field survey, the upcoming <strong>Fulbaria route bus</strong> is scheduled for campus service. Dedicated bus bays (B01, B02...) are tracked in real-time. If primary bays fill up, an immediate overflow alert is broadcast to attendants to open auxiliary bus staging areas.
+              </p>
+            </div>
+
+            <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm self-stretch lg:self-auto min-w-[280px]">
+              <div className="flex items-center justify-between text-xs font-semibold mb-2">
+                <span className="text-purple-200">Campus Bus Bays:</span>
+                <span className="text-white font-mono">{availableBusSlots.length} / {busSlots.length} Free</span>
+              </div>
+              {availableBusSlots.length > 0 ? (
+                <div className="p-2.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-medium flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                  <span>Bay {availableBusSlots[0]?.slotNumber} designated for Fulbaria Shuttle.</span>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-lg bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                  <span>CAPACITY ALERT: All primary bus bays occupied! Dispatch attendant to secondary lot.</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Slot Registration & Batch Generator Card */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -378,18 +540,18 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 Slot Registration &amp; Batch Generator
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Register new parking slots for <strong>Motorcycles (Mxx)</strong>, <strong>Cars (Cxx)</strong>, <strong>Buses (Bxx)</strong>, or <strong>Other (Oxx)</strong> into the university database.
+                Register new parking slots for Motorcycles (Mxx), Cars (Cxx), Buses (Bxx), or Other (Oxx) into the university database.
               </p>
             </div>
 
-            {/* Mode Selector */}
-            <div className="inline-flex rounded-xl border border-slate-300 p-1 bg-slate-50 text-xs font-semibold">
+            {/* Mode Toggle: Batch vs Single */}
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setRegMode("batch")}
                 className={`px-3 py-1.5 rounded-lg transition-colors ${
                   regMode === "batch"
-                    ? "bg-indigo-600 text-white shadow-sm"
+                    ? "bg-white text-indigo-700 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -400,7 +562,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 onClick={() => setRegMode("single")}
                 className={`px-3 py-1.5 rounded-lg transition-colors ${
                   regMode === "single"
-                    ? "bg-indigo-600 text-white shadow-sm"
+                    ? "bg-white text-indigo-700 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -409,11 +571,10 @@ export default function AdminPortal({ user }: AdminPortalProps) {
             </div>
           </div>
 
-          {/* Registration Form */}
           <form onSubmit={handleRegisterSlots} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Area Select */}
+            {/* Target Lot Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
                 Target Parking Lot
               </label>
               <select
@@ -421,21 +582,17 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 onChange={(e) => setRegAreaId(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
               >
-                {areas.length === 0 ? (
-                  <option value="">No parking lots available</option>
-                ) : (
-                  areas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.code})
-                    </option>
-                  ))
-                )}
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.code})
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Vehicle Category Select */}
+            {/* Vehicle Category Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
                 Vehicle Category
               </label>
               <select
@@ -443,36 +600,28 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                 onChange={(e) => setRegCategoryId(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
               >
-                {categories.length === 0 ? (
-                  <option value="">No categories available</option>
-                ) : (
-                  categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name === "CAR" && "🚗 Car (Prefix: C)"}
-                      {c.name === "BIKE" && "🏍️ Motorcycle / Bike (Prefix: M)"}
-                      {c.name === "BUS" && "🚌 University Bus (Prefix: B)"}
-                      {c.name !== "CAR" && c.name !== "BIKE" && c.name !== "BUS" && `🚐 ${c.name} (Prefix: ${c.codePrefix})`}
-                    </option>
-                  ))
-                )}
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} (Prefix: {c.codePrefix}xx)
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Form Fields Based on Mode */}
+            {/* Conditional Mode Inputs */}
             {regMode === "batch" ? (
               <>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
                     Slots Quantity
                   </label>
                   <input
                     type="number"
-                    min={1}
-                    max={50}
+                    min="1"
+                    max="50"
                     value={batchCount}
-                    onChange={(e) => setBatchCount(Number(e.target.value))}
+                    onChange={(e) => setBatchCount(Math.max(1, parseInt(e.target.value) || 1))}
                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="e.g. 5 or 10"
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">
                     Auto-formats as {selectedCategoryObj?.codePrefix || "C"}01, {selectedCategoryObj?.codePrefix || "C"}02...
@@ -485,15 +634,15 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     disabled={isSubmittingSlot}
                     className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow transition-colors disabled:opacity-50"
                   >
-                    {isSubmittingSlot ? "Generating Slots..." : "Generate Batch Slots"}
+                    {isSubmittingSlot ? "Generating..." : "Generate Batch Slots"}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Slot Identifier Number
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                    Slot Identifier
                   </label>
                   <input
                     type="text"
@@ -575,7 +724,7 @@ export default function AdminPortal({ user }: AdminPortalProps) {
                     selectedCategoryFilter === "BIKE" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
                   }`}
                 >
-                  <Bike className="h-3 w-3" /> Motorcycle
+                  <Bike className="h-3 w-3" /> Motorcycle (2-Side Lane)
                 </button>
                 <button
                   type="button"
@@ -612,77 +761,55 @@ export default function AdminPortal({ user }: AdminPortalProps) {
             <div className="py-12 text-center text-slate-500 text-sm">
               No slots registered for the selected filter. Use the registration form above to create slots.
             </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {filteredSlots.map((slot) => {
-                const isAvailable = slot.status === "AVAILABLE";
-                const isReserved = slot.status === "RESERVED";
-                const isOccupied = slot.status === "OCCUPIED";
-                const isMaintenance = slot.status === "MAINTENANCE";
+          ) : selectedCategoryFilter === "BIKE" && motorcycleSlots.length > 0 ? (
+            /* Special Two-Sided Motorcycle Bay Architecture (Field Visit Report Specification) */
+            <div className="mt-4 p-5 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="mb-4 text-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full inline-block">
+                  🏍️ Two-Sided Serial Motorcycle Bay System
+                </span>
+                <p className="text-xs text-slate-500 mt-1">
+                  Serial-allocated parking on Side A and Side B with an unobstructed central driveway for easy maneuvering and exit.
+                </p>
+              </div>
 
-                return (
-                  <div
-                    key={slot.id}
-                    className={`rounded-xl border p-3.5 transition-all text-center relative ${
-                      isAvailable
-                        ? "border-emerald-300 bg-emerald-50/50"
-                        : isReserved
-                        ? "border-amber-300 bg-amber-50/40"
-                        : isOccupied
-                        ? "border-rose-200 bg-rose-50/40"
-                        : "border-slate-300 bg-slate-100 opacity-70"
-                    }`}
-                  >
-                    <div className="font-mono text-base font-black text-slate-900">
-                      {slot.slotNumber}
-                    </div>
-
-                    <div className="text-[11px] font-semibold text-slate-600 mt-0.5 flex items-center justify-center gap-1">
-                      {slot.category.name === "CAR" && <Car className="h-3 w-3 text-blue-600" />}
-                      {slot.category.name === "BIKE" && <Bike className="h-3 w-3 text-emerald-600" />}
-                      {slot.category.name === "BUS" && <Bus className="h-3 w-3 text-purple-600" />}
-                      <span>{slot.category.name}</span>
-                    </div>
-
-                    <div
-                      className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
-                        isAvailable
-                          ? "bg-emerald-100 text-emerald-800"
-                          : isReserved
-                          ? "bg-amber-100 text-amber-800"
-                          : isOccupied
-                          ? "bg-rose-100 text-rose-800"
-                          : "bg-slate-200 text-slate-700"
-                      }`}
-                    >
-                      {slot.status}
-                    </div>
-
-                    {/* Maintenance Toggle */}
-                    <div className="mt-2 pt-2 border-t border-slate-200/60">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleStatus(slot.id, slot.status)}
-                        disabled={isOccupied || isReserved}
-                        title={
-                          isMaintenance
-                            ? "Re-enable slot to AVAILABLE"
-                            : isOccupied || isReserved
-                            ? "Cannot modify in-use slot"
-                            : "Set slot to MAINTENANCE"
-                        }
-                        className={`w-full py-1 rounded text-[10px] font-semibold transition-colors ${
-                          isMaintenance
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                            : "bg-slate-200 hover:bg-slate-300 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                        }`}
-                      >
-                        {isMaintenance ? "Restore" : "Maintenance"}
-                      </button>
-                    </div>
+              <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 items-stretch">
+                {/* Side A */}
+                <div className="lg:col-span-3 space-y-3">
+                  <div className="bg-emerald-600 text-white font-bold text-xs py-2 px-3 rounded-xl text-center shadow-2xs">
+                    SIDE A (Serial Bays)
                   </div>
-                );
-              })}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {sideASlots.map((slot) => renderSlotAdminCard(slot))}
+                  </div>
+                </div>
+
+                {/* Central Driveway */}
+                <div className="lg:col-span-1 bg-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center text-white border-2 border-dashed border-amber-400/80 shadow-inner min-h-[160px]">
+                  <Navigation className="h-6 w-6 text-amber-400 animate-bounce mb-2" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-300 block">
+                    Central Driveway
+                  </span>
+                  <span className="text-[9px] text-slate-300 mt-1 leading-tight font-medium">
+                    Empty Maneuvering Passage (Free Entry / Exit Lane ➡️)
+                  </span>
+                </div>
+
+                {/* Side B */}
+                <div className="lg:col-span-3 space-y-3">
+                  <div className="bg-emerald-600 text-white font-bold text-xs py-2 px-3 rounded-xl text-center shadow-2xs">
+                    SIDE B (Serial Bays)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {sideBSlots.map((slot) => renderSlotAdminCard(slot))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Standard Grid for Car, Bus, or All */
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {filteredSlots.map((slot) => renderSlotAdminCard(slot))}
             </div>
           )}
         </div>
