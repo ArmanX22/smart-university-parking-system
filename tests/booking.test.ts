@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { it, expect, beforeAll, afterAll } from "vitest";
+import { describeDatabase } from "./test-database";
 import prisma from "../lib/prisma";
 import { BookingService } from "../server/services/booking.service";
 import { WaitingListService } from "../server/services/waiting-list.service";
 import { SlotStatus, BookingStatus, UserRole } from "@prisma/client";
 import { ConflictError } from "../server/errors/api-error";
 
-describe("Phase 5: Transactional Booking Engine & Concurrency Protections", () => {
+describeDatabase("Phase 5: Transactional Booking Engine & Concurrency Protections", () => {
   let testAreaId: string;
   let testCategoryId: string;
   let driver1Id: string;
@@ -156,7 +157,11 @@ describe("Phase 5: Transactional Booking Engine & Concurrency Protections", () =
 
     // 1. Attendant confirms physical arrival check-in
     const checkInResult = await BookingService.verifyArrival({
+      actorId: driver1Id,
+      actorRole: UserRole.ADMIN,
+      assignedAreaId: null,
       bookingCode: booking!.bookingCode,
+      qrSecret: booking!.qrCodeSecret,
     });
 
     expect(checkInResult.booking.status).toBe(BookingStatus.ACTIVE);
@@ -171,7 +176,11 @@ describe("Phase 5: Transactional Booking Engine & Concurrency Protections", () =
 
     // 2. Attendant confirms physical vehicle exit
     const checkOutResult = await BookingService.verifyExit({
+      actorId: driver1Id,
+      actorRole: UserRole.ADMIN,
+      assignedAreaId: null,
       bookingCode: booking!.bookingCode,
+      qrSecret: booking!.qrCodeSecret,
     });
 
     expect(checkOutResult.booking.status).toBe(BookingStatus.COMPLETED);
@@ -203,13 +212,21 @@ describe("Phase 5: Transactional Booking Engine & Concurrency Protections", () =
 
     // 3. Driver 1 enters -> ACTIVE
     await BookingService.verifyArrival({
+      actorId: driver1Id,
+      actorRole: UserRole.ADMIN,
+      assignedAreaId: null,
       bookingCode: booking1.bookingCode,
+      qrSecret: booking1.qrCodeSecret,
     });
 
     // 4. Driver 1 exits -> verifyExit called!
     // Invariant: Slot must NOT go to AVAILABLE; it should auto-allocate to Driver 2!
     const exitResult = await BookingService.verifyExit({
+      actorId: driver1Id,
+      actorRole: UserRole.ADMIN,
+      assignedAreaId: null,
       bookingCode: booking1.bookingCode,
+      qrSecret: booking1.qrCodeSecret,
     });
 
     expect(exitResult.reallocatedToWaitingUser).toBe(true);

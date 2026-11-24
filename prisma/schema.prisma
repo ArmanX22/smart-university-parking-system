@@ -162,7 +162,8 @@ model Vehicle {
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   category VehicleCategory @relation(fields: [categoryId], references: [id])
-  bookings Booking[]
+  bookings          Booking[]
+  waitingListEntries WaitingListEntry[]
 
   @@index([userId])
   @@index([categoryId])
@@ -269,6 +270,7 @@ model WaitingListEntry {
   userId             String
   areaId             String
   categoryId         String
+  vehicleId          String?
   status             WaitingStatus @default(WAITING)
   allocatedBookingId String?
   createdAt          DateTime      @default(now())
@@ -277,8 +279,10 @@ model WaitingListEntry {
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   area     ParkingArea     @relation(fields: [areaId], references: [id], onDelete: Cascade)
   category VehicleCategory @relation(fields: [categoryId], references: [id])
+  vehicle  Vehicle?        @relation(fields: [vehicleId], references: [id])
 
   @@index([areaId, categoryId, status, createdAt])
+  @@index([vehicleId])
   @@index([userId])
 }
 

@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { Prisma, SlotStatus, WaitingStatus, BookingStatus, Booking } from "@prisma/client";
-import { ConflictError, NotFoundError } from "@/server/errors/api-error";
+import { ConflictError, NotFoundError, ValidationError } from "@/server/errors/api-error";
 
 export class WaitingListService {
   /**
@@ -18,6 +18,9 @@ export class WaitingListService {
     });
     if (!vehicle) {
       throw new NotFoundError("Selected vehicle not found or does not belong to user.");
+    }
+    if (vehicle.categoryId !== data.categoryId) {
+      throw new ValidationError("Selected vehicle does not match the requested queue category.");
     }
 
     // Check if slots are currently available (no queue needed)
@@ -54,6 +57,7 @@ export class WaitingListService {
         userId: data.userId,
         areaId: data.areaId,
         categoryId: data.categoryId,
+        vehicleId: data.vehicleId,
         status: WaitingStatus.WAITING,
       },
       include: {
@@ -97,15 +101,7 @@ export class WaitingListService {
         status: WaitingStatus.WAITING,
       },
       orderBy: { createdAt: "asc" },
-      include: {
-        user: {
-          include: {
-            vehicles: {
-              where: { categoryId },
-            },
-          },
-        },
-      },
+      include: { vehicle: true },
     });
 
     // If no one is waiting, release slot to AVAILABLE
@@ -120,10 +116,39 @@ export class WaitingListService {
       return null;
     }
 
-    // 2. Resolve vehicle for waiting user
-    const vehicle = nextWaiting.user.vehicles[0];
-    if (!vehicle) {
-      // User has no valid vehicle registered for this category; skip and recurse
+    // Claim the FIFO row. Only the transaction that changes WAITING -> ALLOCATED may continue.
+    const claim = await tx.waitingListEntry.updateMany({
+      where: { id: nextWaiting.id, status: WaitingStatus.WAITING },
+      data: { status: WaitingStatus.ALLOCATED },
+    });
+    if (claim.count === 0) {
+      return this.allocateNext(tx, areaId, categoryId, slotId);
+    }
+
+    // Legacy rows without a selected vehicle are cancelled safely.
+    const vehicle = nextWaiting.vehicle;
+    if (!vehicle || vehicle.userId !== nextWaiting.userId || vehicle.categoryId !== categoryId) {
+      await tx.waitingListEntry.update({
+        where: { id: nextWaiting.id },
+        data: { status: WaitingStatus.CANCELLED },
+      });
+      return this.allocateNext(tx, areaId, categoryId, slotId);
+    }
+
+    const existingBooking = await tx.booking.findFirst({
+      where: {
+        vehicleId: vehicle.id,
+        status: {
+          in: [
+            BookingStatus.PENDING_ARRIVAL,
+            BookingStatus.ACTIVE,
+            BookingStatus.EXPIRED_AWAITING_EXIT,
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    if (existingBooking) {
       await tx.waitingListEntry.update({
         where: { id: nextWaiting.id },
         data: { status: WaitingStatus.CANCELLED },
@@ -155,13 +180,10 @@ export class WaitingListService {
       },
     });
 
-    // 5. Mark waiting entry as ALLOCATED
+    // 5. Link the claimed queue entry to the created booking.
     await tx.waitingListEntry.update({
       where: { id: nextWaiting.id },
-      data: {
-        status: WaitingStatus.ALLOCATED,
-        allocatedBookingId: booking.id,
-      },
+      data: { allocatedBookingId: booking.id },
     });
 
     // 6. Keep slot RESERVED

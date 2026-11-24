@@ -26,6 +26,7 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { useParkingStream } from "@/hooks/use-parking-stream";
 import { AIParkingAssistant } from "@/components/ai/ai-parking-assistant";
 import Link from "next/link";
+import { formatGateCredential } from "@/lib/booking-view";
 
 interface ParkingArea {
   id: string;
@@ -50,7 +51,8 @@ interface ParkingSlot {
 
 interface ActiveBooking {
   id: string;
-  bookingReference: string;
+  bookingCode: string;
+  qrCodeSecret: string;
   status: "PENDING_ARRIVAL" | "ACTIVE" | "EXPIRED_AWAITING_EXIT" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
   arrivalExpiresAt?: string;
   arrivalGraceExpiresAt?: string;
@@ -329,6 +331,7 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
         body: JSON.stringify({
           areaId: selectedAreaId,
           categoryId: selectedVehicle.categoryId,
+          vehicleId: selectedVehicle.id,
         }),
       });
 
@@ -541,7 +544,7 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
                       University Digital Parking E-Ticket &bull; Official Campus Pass
                     </span>
                     <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                      <span>Booking Reference: {activeBooking.bookingReference}</span>
+                      <span>Booking Reference: {activeBooking.bookingCode}</span>
                     </h3>
                   </div>
                 </div>
@@ -594,7 +597,7 @@ export default function DriverPortal({ user, vehicles }: DriverPortalProps) {
                   <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
                     <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <strong>Gate Protocol:</strong> Upon arriving at the campus main gate, present your booking reference (<strong>{activeBooking.bookingReference}</strong>) to the gate staff. Attendant verification will open the in-gate and mark your slot OCCUPIED.
+                      <strong>Gate Protocol:</strong> Upon arriving at the campus main gate, present this gate credential: <strong>{formatGateCredential(activeBooking.bookingCode, activeBooking.qrCodeSecret)}</strong>. Attendant verification will open the in-gate and mark your slot OCCUPIED.
                       <br />
                       <span className="text-amber-800 font-semibold mt-1 inline-block">
                         ⚠️ Automatic Rule: If you do not arrive before the 15-minute countdown expires, this reservation is automatically canceled (NO_SHOW) and the slot is released to waiting drivers.

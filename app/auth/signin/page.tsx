@@ -14,7 +14,6 @@ function SignInContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("DRIVER");
   const [loadingRole, setLoadingRole] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(
     errorParam ? "Authentication failed. Please verify your credentials." : null
@@ -30,11 +29,10 @@ function SignInContent() {
     try {
       setLoadingRole("credentials");
       setErrorMsg(null);
-      const redirectPath = `/${role.toLowerCase()}`;
+      const redirectPath = "/driver";
       const res = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
-        role,
         redirect: false,
         callbackUrl: redirectPath,
       });
@@ -233,20 +231,9 @@ function SignInContent() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Portal Role
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-sm font-semibold focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-            >
-              <option value="DRIVER">Student / Faculty Driver</option>
-              <option value="ADMIN">Campus Administrator</option>
-              <option value="ATTENDANT">Parking Gate Attendant</option>
-            </select>
-          </div>
+          <p className="text-xs text-slate-500">
+            Custom university accounts open the Student / Faculty Driver portal. Use the fixed one-click cards above for classroom Admin or Attendant testing.
+          </p>
 
           <button
             type="submit"

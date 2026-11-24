@@ -1,10 +1,11 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { it, expect, afterAll } from "vitest";
+import { describeDatabase } from "./test-database";
 import prisma from "../lib/prisma";
 import { InventoryService } from "../server/services/inventory.service";
 import { SlotStatus } from "@prisma/client";
 import { ConflictError, NotFoundError } from "../server/errors/api-error";
 
-describe("Phase 4: Parking Inventory Management", () => {
+describeDatabase("Phase 4: Parking Inventory Management", () => {
   let createdAreaId: string;
   let carCategoryId: string;
 
@@ -95,10 +96,18 @@ describe("Phase 4: Parking Inventory Management", () => {
     const slots = await InventoryService.listSlots({ areaId: createdAreaId });
     const testSlot = slots[0];
 
-    const maintenanceSlot = await InventoryService.updateSlotStatus(testSlot.id, SlotStatus.MAINTENANCE);
+    const maintenanceSlot = await InventoryService.updateSlotStatus(
+      testSlot.id,
+      SlotStatus.MAINTENANCE,
+      { role: "ADMIN", assignedAreaId: null }
+    );
     expect(maintenanceSlot.status).toBe(SlotStatus.MAINTENANCE);
 
-    const availableSlot = await InventoryService.updateSlotStatus(testSlot.id, SlotStatus.AVAILABLE);
+    const availableSlot = await InventoryService.updateSlotStatus(
+      testSlot.id,
+      SlotStatus.AVAILABLE,
+      { role: "ADMIN", assignedAreaId: null }
+    );
     expect(availableSlot.status).toBe(SlotStatus.AVAILABLE);
   });
 });

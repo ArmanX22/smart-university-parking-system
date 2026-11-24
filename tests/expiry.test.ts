@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { it, expect, beforeAll, afterAll } from "vitest";
+import { describeDatabase } from "./test-database";
 import prisma from "../lib/prisma";
 import { ExpiryService } from "../server/services/expiry.service";
 import { SlotStatus, BookingStatus, UserRole } from "@prisma/client";
 
-describe("Phase 6: Timers and Expiry Scheduler", () => {
+describeDatabase("Phase 6: Timers and Expiry Scheduler", () => {
   let testAreaId: string;
   let testCategoryId: string;
   let driverId: string;

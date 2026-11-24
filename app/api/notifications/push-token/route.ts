@@ -35,12 +35,13 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const user = await requireAuth();
     const body = await req.json();
     if (!body?.token) {
       throw new ValidationError("Device push token is required for unregistration");
     }
 
-    await NotificationService.unregisterToken(body.token);
+    await NotificationService.unregisterToken(user.id, body.token);
     return Response.json({ success: true, message: "Token unregistered successfully." });
   } catch (error) {
     return handleApiError(error);

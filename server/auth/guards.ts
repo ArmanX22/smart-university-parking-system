@@ -89,6 +89,14 @@ export async function requireDriver(): Promise<AuthenticatedUser> {
 /**
  * Retrieves the parking area assigned to the given attendant.
  */
+export async function getAttendantAssignedAreaId(userId: string): Promise<string | null> {
+  const assignment = await prisma.attendantAssignment.findFirst({
+    where: { userId },
+    select: { areaId: true },
+  });
+  return assignment?.areaId ?? null;
+}
+
 export async function getAttendantAssignedArea(userId: string) {
   const assignment = await prisma.attendantAssignment.findFirst({
     where: { userId },

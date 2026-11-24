@@ -35,13 +35,13 @@ describe("Phase 8: SSE Real-Time Telemetry & Event Hub", () => {
       slotId: "slot-test-123",
       status: "ACTIVE",
       slotNumber: "C01",
-      vehiclePlate: "DHK-1234",
     };
 
     SseService.broadcastBookingUpdate(event);
 
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(event);
+    expect(event).not.toHaveProperty("vehiclePlate");
 
     unsubscribe();
   });

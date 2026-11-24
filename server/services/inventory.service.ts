@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
-import { SlotStatus } from "@prisma/client";
-import { ConflictError, NotFoundError, ValidationError } from "@/server/errors/api-error";
+import { SlotStatus, UserRole } from "@prisma/client";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/server/errors/api-error";
 
 export class InventoryService {
   // ===========================================================================
@@ -397,7 +397,11 @@ export class InventoryService {
     };
   }
 
-  static async updateSlotStatus(slotId: string, status: SlotStatus) {
+  static async updateSlotStatus(
+    slotId: string,
+    status: SlotStatus,
+    actor: { role: UserRole; assignedAreaId: string | null }
+  ) {
     const slot = await prisma.parkingSlot.findUnique({
       where: { id: slotId },
       include: {
@@ -411,18 +415,28 @@ export class InventoryService {
       throw new NotFoundError(`Slot with ID ${slotId} not found.`);
     }
 
-    // Safety rule: Cannot set to MAINTENANCE if physically occupied or reserved
-    if (status === SlotStatus.MAINTENANCE && slot.bookings.length > 0) {
-      throw new ConflictError(
-        `Cannot place slot "${slot.slotNumber}" under maintenance while an active booking is in progress.`
+    if (actor.role === UserRole.ATTENDANT && actor.assignedAreaId !== slot.areaId) {
+      throw new ForbiddenError("Attendants may update slots only in their assigned parking area.");
+    }
+
+    if (status !== SlotStatus.AVAILABLE && status !== SlotStatus.MAINTENANCE) {
+      throw new ValidationError(
+        "Manual status changes may only toggle AVAILABLE and MAINTENANCE. Booking transitions manage RESERVED and OCCUPIED."
       );
     }
 
-    // Safety rule: Cannot set occupied slot to AVAILABLE if vehicle is still in EXPIRED_AWAITING_EXIT
-    const overstayBooking = slot.bookings.find((b) => b.status === "EXPIRED_AWAITING_EXIT");
-    if (overstayBooking && status === SlotStatus.AVAILABLE) {
+    if (slot.bookings.length > 0) {
       throw new ConflictError(
-        `CRITICAL SAFETY VIOLATION: Cannot mark slot "${slot.slotNumber}" as AVAILABLE while vehicle is still physically present overstaying. Exit must be verified first.`
+        `Cannot manually change slot "${slot.slotNumber}" while a pending or active booking exists.`
+      );
+    }
+
+    const validTransition =
+      (slot.status === SlotStatus.AVAILABLE && status === SlotStatus.MAINTENANCE) ||
+      (slot.status === SlotStatus.MAINTENANCE && status === SlotStatus.AVAILABLE);
+    if (!validTransition) {
+      throw new ValidationError(
+        `Invalid manual slot transition from ${slot.status} to ${status}.`
       );
     }
 

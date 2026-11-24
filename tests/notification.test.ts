@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { it, expect, beforeAll, afterAll } from "vitest";
+import { describeDatabase } from "./test-database";
 import prisma from "../lib/prisma";
 import { NotificationService } from "../server/services/notification.service";
 import { NotificationType, UserRole } from "@prisma/client";
 
-describe("Phase 7: FCM Push Notifications & In-App Alerts", () => {
+describeDatabase("Phase 7: FCM Push Notifications & In-App Alerts", () => {
   let testUserId: string;
   const testToken = `test-fcm-device-token-${Date.now()}`;
 
@@ -78,7 +79,7 @@ describe("Phase 7: FCM Push Notifications & In-App Alerts", () => {
   }, 30000);
 
   it("unregisters a device push token cleanly", async () => {
-    await NotificationService.unregisterToken(testToken);
+    await NotificationService.unregisterToken(testUserId, testToken);
 
     const tokenInDb = await prisma.devicePushToken.findUnique({
       where: { token: testToken },

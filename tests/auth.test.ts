@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { UserRole } from "@prisma/client";
 import { AuthenticationError, ForbiddenError, handleApiError } from "../server/errors/api-error";
+import { requireProductionSecret, resolveCredentialRole } from "../lib/auth-policy";
 
 describe("Phase 3: Authentication & Role-Based Access Control", () => {
   it("formats AuthenticationError with HTTP 401 status", async () => {
@@ -25,6 +26,33 @@ describe("Phase 3: Authentication & Role-Based Access Control", () => {
     const body = await response.json();
     expect(body.success).toBe(false);
     expect(body.error).toBe("Requires ADMIN role");
+  });
+
+  it("allows only fixed demo accounts to receive privileged roles", () => {
+    expect(resolveCredentialRole("admin@university.edu", "DRIVER")).toBe(UserRole.ADMIN);
+    expect(resolveCredentialRole("attendant@university.edu", "ADMIN")).toBe(UserRole.ATTENDANT);
+    expect(resolveCredentialRole("driver@university.edu", "ADMIN")).toBe(UserRole.DRIVER);
+  });
+
+  it("forces every custom email to DRIVER regardless of requested role", () => {
+    expect(resolveCredentialRole("student@university.edu", "ADMIN")).toBe(UserRole.DRIVER);
+    expect(resolveCredentialRole("teacher@university.edu", "ATTENDANT")).toBe(UserRole.DRIVER);
+  });
+
+  it("matches fixed demo identities case-insensitively", () => {
+    expect(resolveCredentialRole(" ADMIN@UNIVERSITY.EDU ", undefined)).toBe(UserRole.ADMIN);
+  });
+
+  it("fails closed when a required production secret is missing", () => {
+    expect(() => requireProductionSecret("NEXTAUTH_SECRET", undefined, "production")).toThrow(
+      "NEXTAUTH_SECRET is required in production"
+    );
+  });
+
+  it("allows an explicit local fallback outside production", () => {
+    expect(requireProductionSecret("NEXTAUTH_SECRET", undefined, "development", "local-only")).toBe(
+      "local-only"
+    );
   });
 
   it("enforces role hierarchy rules", () => {

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { BookingService } from "@/server/services/booking.service";
-import { requireAttendant } from "@/server/auth/guards";
+import { getAttendantAssignedAreaId, requireAttendant } from "@/server/auth/guards";
 import { verifyArrivalSchema } from "@/schemas/booking.schema";
 import { handleApiError, ValidationError } from "@/server/errors/api-error";
 
@@ -14,8 +14,11 @@ export async function POST(req: NextRequest) {
       throw new ValidationError("Invalid check-in parameters", parsed.error.format());
     }
 
+    const assignedAreaId = await getAttendantAssignedAreaId(actor.id);
     const result = await BookingService.verifyArrival({
       actorId: actor.id,
+      actorRole: actor.role,
+      assignedAreaId,
       bookingCode: parsed.data.bookingCode,
       qrSecret: parsed.data.qrSecret,
     });

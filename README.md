@@ -91,9 +91,57 @@ npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 4. Run Tests & Typechecking
+### 4. Prepare the Database
+
+Use a non-production TiDB database for local tests. Apply committed migrations, then restore deterministic demo data:
+
+```bash
+npx prisma migrate deploy
+npm run db:seed
+```
+
+The seed/reset creates three one-click classroom identities:
+
+- `driver@university.edu` → Driver
+- `attendant@university.edu` → Attendant assigned to North Campus Main Lot
+- `admin@university.edu` → Admin
+
+Any custom email is always a Driver. Client input cannot grant Admin or Attendant access.
+
+### 5. Run Tests & Typechecking
+
+Database-independent regression suite:
+
 ```bash
 npm run typecheck
-npm test
-npm run lint
+npm test -- tests/setup.test.ts tests/schema.test.ts tests/auth.test.ts tests/sse.test.ts tests/booking-state.test.ts tests/waiting-list-state.test.ts tests/inventory-state.test.ts tests/notification-state.test.ts tests/demo-reset.test.ts
 ```
+
+The integration suites are skipped unless `TEST_DATABASE_URL` is set because they create and delete rows. Run them only against a seeded disposable TiDB database:
+
+```bash
+TEST_DATABASE_URL='mysql://...' npm test
+```
+
+Never point `TEST_DATABASE_URL` at production.
+
+## Vercel Deployment
+
+1. Create a TiDB database and set `DATABASE_URL`.
+2. Run `npx prisma migrate deploy`, then `npm run db:seed` against that database.
+3. Add `NEXTAUTH_URL`, a random `NEXTAUTH_SECRET`, Google OAuth values if used, `CRON_SECRET`, and a separate random `RESET_SECRET` in Vercel.
+4. Add Firebase and Gemini values only when those integrations are enabled.
+5. Deploy, then verify Driver booking, assigned-area gate operations, expiry recovery, and the protected reset endpoint.
+
+`vercel.json` schedules expiry recovery at midnight and the demo reset five minutes later. The application also expires missed arrivals on authoritative server reads, so correctness does not depend on a sub-15-minute cron plan. Confirm that your Vercel plan supports the configured cron schedules.
+
+## Classroom Reset
+
+Shared data persists during the day. The nightly reset deletes mutable demo data and recreates the deterministic users, areas, policies, slots, assignment, and sample vehicle. Vercel Cron calls `GET /api/cron/reset-demo` with `CRON_SECRET`; a manual reset uses `POST /api/cron/reset-demo` with `Authorization: Bearer <RESET_SECRET>`.
+
+## Known Limitations
+
+- The in-memory SSE event bus is instance-local. On Vercel, polling and server refetches are authoritative; SSE is only a best-effort latency optimization.
+- Browser FCM setup still requires valid Firebase web configuration, a service worker, notification permission, and a real registration token. In-app notifications remain the fallback.
+- One-click Admin and Attendant access is intentionally public for classroom bug testing. Do not reuse this authentication model for a real campus deployment.
+- Review `npm audit` findings deliberately; do not run force upgrades without testing framework compatibility.

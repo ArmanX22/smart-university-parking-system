@@ -280,12 +280,18 @@ export default function AdminPortal({ user }: AdminPortalProps) {
 
       if (res.ok) {
         const data = await res.json();
-        setExpiryResult(data.summary);
+        const summary = data.data;
+        setExpiryResult({
+          noShowsProcessed: summary.processedArrivalGraceExpiries,
+          overstaysProcessed: summary.processedParkingDurationExpiries,
+          slotsFreed: summary.processedArrivalGraceExpiries,
+          timestamp: summary.timestamp,
+        });
         loadAreasAndCategories();
         if (selectedAreaId) loadSlots(selectedAreaId);
         setStatusMessage({
           type: "success",
-          text: `Expiry run complete. No-shows cancelled: ${data.summary.noShowsProcessed}, slots freed: ${data.summary.slotsFreed}.`,
+          text: `Expiry run complete. No-shows cancelled: ${summary.processedArrivalGraceExpiries}, overstays flagged: ${summary.processedParkingDurationExpiries}.`,
         });
       }
     } catch {

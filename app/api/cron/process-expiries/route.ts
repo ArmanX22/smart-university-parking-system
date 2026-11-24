@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { ExpiryService } from "@/server/services/expiry.service";
+import { requireProductionSecret } from "@/lib/auth-policy";
+import { isResetAuthorized } from "@/server/auth/cron-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -13,19 +15,15 @@ export async function POST(req: NextRequest) {
 
 async function handleCron(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
-  const customHeader = req.headers.get("x-cron-secret");
-  const { searchParams } = new URL(req.url);
-  const querySecret = searchParams.get("key");
 
-  const expectedSecret = process.env.CRON_SECRET || "dev-cron-secret-key";
+  const expectedSecret = requireProductionSecret(
+    "CRON_SECRET",
+    process.env.CRON_SECRET,
+    process.env.NODE_ENV,
+    "local-development-cron-secret"
+  );
 
-  // Check authorization
-  const isAuthorized =
-    authHeader === `Bearer ${expectedSecret}` ||
-    customHeader === expectedSecret ||
-    querySecret === expectedSecret;
-
-  if (!isAuthorized) {
+  if (!isResetAuthorized(authHeader, expectedSecret)) {
     return Response.json(
       {
         success: false,

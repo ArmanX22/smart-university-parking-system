@@ -45,21 +45,17 @@ export class ExpiryService {
 
     for (const booking of overdueArrivals) {
       try {
-        await prisma.$transaction(async (tx) => {
-          // Idempotency check: Re-verify status inside transaction
-          const current = await tx.booking.findUnique({
-            where: { id: booking.id },
-          });
-
-          if (current?.status !== BookingStatus.PENDING_ARRIVAL) {
-            return;
-          }
-
-          // Transition to NO_SHOW
-          await tx.booking.update({
-            where: { id: booking.id },
+        const transitioned = await prisma.$transaction(async (tx) => {
+          const transition = await tx.booking.updateMany({
+            where: {
+              id: booking.id,
+              status: BookingStatus.PENDING_ARRIVAL,
+              arrivalExpiresAt: { lte: now },
+            },
             data: { status: BookingStatus.NO_SHOW },
           });
+
+          if (transition.count === 0) return false;
 
           // Release slot to AVAILABLE or allocate to next waiting user
           const reallocated = await WaitingListService.allocateNext(
@@ -92,9 +88,10 @@ export class ExpiryService {
               }),
             },
           });
+          return true;
         });
 
-        result.processedArrivalGraceExpiries++;
+        if (transitioned) result.processedArrivalGraceExpiries++;
       } catch (err) {
         const msg = `Error expiring arrival grace for booking ${booking.bookingCode}: ${(err as Error).message}`;
         console.error(msg);
@@ -120,22 +117,18 @@ export class ExpiryService {
 
     for (const booking of overdueParkings) {
       try {
-        await prisma.$transaction(async (tx) => {
-          // Idempotency check: Re-verify status inside transaction
-          const current = await tx.booking.findUnique({
-            where: { id: booking.id },
-          });
-
-          if (current?.status !== BookingStatus.ACTIVE) {
-            return;
-          }
-
-          // Transition booking to EXPIRED_AWAITING_EXIT
-          // CRITICAL SAFETY RULE: Slot remains OCCUPIED! Never mark AVAILABLE while vehicle is present!
-          await tx.booking.update({
-            where: { id: booking.id },
+        const transitioned = await prisma.$transaction(async (tx) => {
+          const transition = await tx.booking.updateMany({
+            where: {
+              id: booking.id,
+              status: BookingStatus.ACTIVE,
+              parkingExpiresAt: { lte: now },
+            },
             data: { status: BookingStatus.EXPIRED_AWAITING_EXIT },
           });
+
+          if (transition.count === 0) return false;
+          // Slot remains OCCUPIED until physical exit verification.
 
           // In-app notification for driver
           await tx.notification.create({
@@ -160,9 +153,10 @@ export class ExpiryService {
               }),
             },
           });
+          return true;
         });
 
-        result.processedParkingDurationExpiries++;
+        if (transitioned) result.processedParkingDurationExpiries++;
       } catch (err) {
         const msg = `Error processing parking overstay for booking ${booking.bookingCode}: ${(err as Error).message}`;
         console.error(msg);

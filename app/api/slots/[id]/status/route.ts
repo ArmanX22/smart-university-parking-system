@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { InventoryService } from "@/server/services/inventory.service";
-import { requireAttendant } from "@/server/auth/guards";
+import { getAttendantAssignedAreaId, requireAttendant } from "@/server/auth/guards";
 import { updateSlotStatusSchema } from "@/schemas/inventory.schema";
 import { handleApiError, ValidationError } from "@/server/errors/api-error";
 
@@ -10,7 +10,8 @@ interface RouteContext {
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   try {
-    await requireAttendant();
+    const actor = await requireAttendant();
+    const assignedAreaId = await getAttendantAssignedAreaId(actor.id);
     const body = await req.json();
     const parsed = updateSlotStatusSchema.safeParse(body);
 
@@ -18,7 +19,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       throw new ValidationError("Invalid slot status", parsed.error.format());
     }
 
-    const updated = await InventoryService.updateSlotStatus(params.id, parsed.data.status);
+    const updated = await InventoryService.updateSlotStatus(params.id, parsed.data.status, {
+      role: actor.role,
+      assignedAreaId,
+    });
     return Response.json({ success: true, data: updated });
   } catch (error) {
     return handleApiError(error);

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { UserRole, SlotStatus, BookingStatus, WaitingStatus, NotificationType } from "@prisma/client";
+import { verifyArrivalSchema, verifyExitSchema } from "../schemas/booking.schema";
+import { canManageParkingArea } from "../server/auth/gate-policy";
+import { formatGateCredential } from "../lib/booking-view";
 
 describe("Phase 2: Database Schema & Entity Definitions", () => {
   it("exports all expected UserRole enums", () => {
@@ -29,6 +32,25 @@ describe("Phase 2: Database Schema & Entity Definitions", () => {
     expect(WaitingStatus.ALLOCATED).toBe("ALLOCATED");
     expect(WaitingStatus.CANCELLED).toBe("CANCELLED");
     expect(WaitingStatus.EXPIRED).toBe("EXPIRED");
+  });
+
+  it("includes the QR gate secret in active booking data", () => {
+    expect(formatGateCredential("BK-123", "qr-secret")).toBe("BK-123 / qr-secret");
+  });
+
+  it("requires bookingCode and qrSecret for gate arrival and exit", () => {
+    expect(verifyArrivalSchema.safeParse({ bookingReference: "BK-123", attendantId: "x" }).success).toBe(false);
+    expect(verifyArrivalSchema.safeParse({ bookingCode: "BK-123" }).success).toBe(false);
+    expect(verifyArrivalSchema.safeParse({ bookingCode: "BK-123", qrSecret: "qr-secret" }).success).toBe(true);
+    expect(verifyExitSchema.safeParse({ bookingCode: "BK-123" }).success).toBe(false);
+    expect(verifyExitSchema.safeParse({ bookingCode: "BK-123", qrSecret: "qr-secret" }).success).toBe(true);
+  });
+
+  it("allows admins across areas but limits attendants to assigned areas", () => {
+    expect(canManageParkingArea(UserRole.ADMIN, null, "lot-b")).toBe(true);
+    expect(canManageParkingArea(UserRole.ATTENDANT, "lot-a", "lot-a")).toBe(true);
+    expect(canManageParkingArea(UserRole.ATTENDANT, "lot-a", "lot-b")).toBe(false);
+    expect(canManageParkingArea(UserRole.DRIVER, "lot-a", "lot-a")).toBe(false);
   });
 
   it("exports all required NotificationType enums", () => {

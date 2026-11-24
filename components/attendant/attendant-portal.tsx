@@ -59,6 +59,7 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
   const [currentAreaId, setCurrentAreaId] = useState<string>(assignedArea?.id || "");
   const [slots, setSlots] = useState<SlotItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [qrSecret, setQrSecret] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
@@ -139,8 +140,8 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bookingReference: code,
-          attendantId: user.id,
+          bookingCode: code,
+          qrSecret: qrSecret.trim(),
         }),
       });
 
@@ -150,9 +151,10 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
       } else {
         setActionFeedback({
           type: "success",
-          message: `Gate Opened! Arrival verified for slot ${data.booking.slot.slotNumber}. Status is now OCCUPIED.`,
+          message: `Gate Opened! Arrival verified for slot ${data.data.booking.slot.slotNumber}. Status is now OCCUPIED.`,
         });
         setSearchQuery("");
+        setQrSecret("");
         fetchSlots(currentAreaId);
       }
     } catch {
@@ -177,8 +179,8 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bookingReference: code,
-          attendantId: user.id,
+          bookingCode: code,
+          qrSecret: qrSecret.trim(),
         }),
       });
 
@@ -188,9 +190,10 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
       } else {
         setActionFeedback({
           type: "success",
-          message: `Exit Confirmed! Slot ${data.booking.slot.slotNumber} has been safely released to AVAILABLE.`,
+          message: `Exit Confirmed! Slot ${data.data.booking.slot.slotNumber} has been safely released or reallocated.`,
         });
         setSearchQuery("");
+        setQrSecret("");
         fetchSlots(currentAreaId);
       }
     } catch {
@@ -439,16 +442,23 @@ export default function AttendantPortal({ user, assignedArea }: AttendantPortalP
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold tracking-wide uppercase placeholder:normal-case placeholder:font-normal focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
+              <input
+                type="text"
+                placeholder="QR Secret"
+                value={qrSecret}
+                onChange={(e) => setQrSecret(e.target.value)}
+                className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
               <button
                 onClick={() => handleVerifyArrival()}
-                disabled={isSubmitting || !searchQuery.trim()}
+                disabled={isSubmitting || !searchQuery.trim() || !qrSecret.trim()}
                 className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50"
               >
                 Verify Arrival (Open In-Gate)
               </button>
               <button
                 onClick={() => handleVerifyExit()}
-                disabled={isSubmitting || !searchQuery.trim()}
+                disabled={isSubmitting || !searchQuery.trim() || !qrSecret.trim()}
                 className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50"
               >
                 Verify Exit (Open Out-Gate)

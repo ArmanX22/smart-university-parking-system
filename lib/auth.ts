@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
+import { requireProductionSecret, resolveCredentialRole } from "@/lib/auth-policy";
 
 const providers: NextAuthOptions["providers"] = [];
 
@@ -17,101 +18,86 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-// 2. Official Campus Credentials Provider (Email & Password / Role Switcher)
 providers.push(
+  // DEMO IDENTITY PROVIDER (Fixed demo accounts only)
   CredentialsProvider({
-    id: "credentials",
-    name: "University Credentials",
+    id: "demo",
+    name: "Demo Accounts",
     credentials: {
-      email: { label: "University Email", type: "email" },
-      password: { label: "Password", type: "password" },
-      role: { label: "Role", type: "text" },
+      email: { label: "Demo Email", type: "email" },
     },
     async authorize(credentials) {
       if (!credentials?.email) {
-        throw new Error("University email is required.");
+        throw new Error("Demo email is required.");
       }
 
       const email = credentials.email.trim().toLowerCase();
-      const role = (credentials.role?.toUpperCase() as UserRole) || UserRole.DRIVER;
 
-      // Resilient upsert with retry for serverless DB wake-up
+      // Check for fixed demo identities only
+      const demoEmails: Record<string, string> = {
+        "driver@university.edu": "DRIVER",
+        "admin@university.edu": "ADMIN",
+        "attendant@university.edu": "ATTENDANT",
+      };
+
+      const expectedRole = demoEmails[email] as UserRole;
+      if (!expectedRole) {
+        // Non-demo email: always force to DRIVER
+        // Create/ensure user exists for consistency
+        let user = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            user = await prisma.user.findUnique({ where: { email } });
+            if (!user) {
+              user = await prisma.user.create({
+                data: { email, name: email.split("@")[0].replace(".", " "), role: "DRIVER" }
+              });
+            }
+            break;
+          } catch (err) {
+            if (attempt === 3) throw err;
+            await new Promise(resolve => setTimeout(resolve, 600 * attempt));
+          }
+        }
+        if (!user) throw new Error("Could not authenticate user record.");
+return { id: user.id, name: user.name, email: user.email, role: user.role };
+      }
+
+      // Verify production secrets before granting privileged roles
+      const requiredSecret = requireProductionSecret(
+        "NEXTAUTH_SECRET",
+        process.env.NEXTAUTH_SECRET,
+        process.env.NODE_ENV,
+        "local-development-secret-change-before-deploy"
+      );
+      if (!requiredSecret) {
+        throw new Error("Authentication failed: missing production secret");
+      }
+
+      // Return demo identity with database lookup for ID
       let user = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          user = await prisma.user.findUnique({
-            where: { email },
-          });
-
+          user = await prisma.user.findUnique({ where: { email } });
           if (!user) {
             user = await prisma.user.create({
-              data: {
-                email,
-                name: email.split("@")[0].replace(".", " "),
-                role,
-              },
+              data: { email, name: email.split("@")[0].replace(".", " "), role: expectedRole as UserRole }
+            });
+          } else if (user.role !== expectedRole) {
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { role: expectedRole }
             });
           }
           break;
         } catch (err) {
           if (attempt === 3) throw err;
-          await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+          await new Promise(resolve => setTimeout(resolve, 600 * attempt));
         }
       }
-
-      if (!user) {
-        throw new Error("Could not authenticate user record.");
-      }
-
-      return {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        image: user.image,
-        role: user.role,
-      };
-    },
-  })
-);
-
-// Backward-compatible alias for existing sessions
-providers.push(
-  CredentialsProvider({
-    id: "demo-credentials",
-    name: "Campus Credentials",
-    credentials: {
-      email: { label: "Email", type: "email" },
-      role: { label: "Role", type: "text" },
-    },
-    async authorize(credentials) {
-      if (!credentials?.email) {
-        throw new Error("Email is required for sign-in.");
-      }
-
-      const email = credentials.email.trim().toLowerCase();
-      const role = (credentials.role?.toUpperCase() as UserRole) || UserRole.DRIVER;
-
-      let user = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (!user) {
-        user = await prisma.user.create({
-          data: {
-            email,
-            name: email.split("@")[0].replace(".", " "),
-            role,
-          },
-        });
-      }
-
-      return {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        image: user.image,
-        role: user.role,
-      };
+      if (!user) throw new Error("Could not authenticate user record.");
+      if (!user) throw new Error("Could not authenticate user record.");
+return { id: user.id, name: user.name, email: user.email, role: user.role };
     },
   })
 );
@@ -162,7 +148,12 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || "dev-insecure-secret-key-smart-parking-32chars",
+  secret: requireProductionSecret(
+    "NEXTAUTH_SECRET",
+    process.env.NEXTAUTH_SECRET,
+    process.env.NODE_ENV,
+    "local-development-secret-change-before-deploy"
+  ),
 };
 
 export default authOptions;

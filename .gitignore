@@ -16,6 +16,8 @@
 # Misc
 .DS_Store
 *.pem
+*.zip
+*.rar
 
 # Local env files
 .env*.local

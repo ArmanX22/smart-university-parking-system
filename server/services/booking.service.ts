@@ -1,8 +1,9 @@
 import prisma from "@/lib/prisma";
-import { SlotStatus, BookingStatus } from "@prisma/client";
+import { SlotStatus, BookingStatus, UserRole } from "@prisma/client";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/errors/api-error";
 import { WaitingListService } from "./waiting-list.service";
 import { SseService } from "./sse.service";
+import { assertCanManageParkingArea } from "@/server/auth/gate-policy";
 
 export class BookingService {
   /**
@@ -167,7 +168,6 @@ export class BookingService {
         slotId: result.slotId,
         status: result.status,
         slotNumber: result.slot.slotNumber,
-        vehiclePlate: result.vehicle.licensePlate,
       });
     } catch {
       // quiet fail
@@ -255,9 +255,11 @@ export class BookingService {
    * Starts the allowed parking duration countdown.
    */
   static async verifyArrival(data: {
-    actorId?: string;
+    actorId: string;
+    actorRole: UserRole;
+    assignedAreaId: string | null;
     bookingCode: string;
-    qrSecret?: string;
+    qrSecret: string;
   }) {
     const result = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
@@ -269,14 +271,15 @@ export class BookingService {
         throw new NotFoundError(`Booking "${data.bookingCode}" not found.`);
       }
 
-      // Optional QR secret validation
-      if (data.qrSecret && booking.qrCodeSecret !== data.qrSecret) {
+      assertCanManageParkingArea(data.actorRole, data.assignedAreaId, booking.slot.areaId);
+
+      if (booking.qrCodeSecret !== data.qrSecret) {
         throw new ValidationError("Invalid QR validation secret token.");
       }
 
       // Idempotency: If already active, return existing state
       if (booking.status === BookingStatus.ACTIVE) {
-        return { booking, alreadyActive: true };
+        return { booking, alreadyActive: true, lateArrival: false };
       }
 
       if (booking.status !== BookingStatus.PENDING_ARRIVAL) {
@@ -289,22 +292,29 @@ export class BookingService {
 
       // Grace period timeout check
       if (booking.arrivalExpiresAt < now) {
-        // Mark as NO_SHOW and free slot or assign waiting list
-        await tx.booking.update({
-          where: { id: booking.id },
+        const transition = await tx.booking.updateMany({
+          where: {
+            id: booking.id,
+            status: BookingStatus.PENDING_ARRIVAL,
+            arrivalExpiresAt: { lte: now },
+          },
           data: { status: BookingStatus.NO_SHOW },
         });
 
-        await WaitingListService.allocateNext(
-          tx,
-          booking.slot.areaId,
-          booking.slot.categoryId,
-          booking.slotId
-        );
+        if (transition.count === 1) {
+          await WaitingListService.allocateNext(
+            tx,
+            booking.slot.areaId,
+            booking.slot.categoryId,
+            booking.slotId
+          );
+        }
 
-        throw new ConflictError(
-          `Arrival grace period expired at ${booking.arrivalExpiresAt.toISOString()}. Booking marked as NO_SHOW.`
-        );
+        return {
+          booking: { ...booking, status: BookingStatus.NO_SHOW },
+          alreadyActive: false,
+          lateArrival: true,
+        };
       }
 
       // Calculate parking expiry from actual check-in time
@@ -347,8 +357,14 @@ export class BookingService {
         },
       });
 
-      return { booking: updatedBooking, alreadyActive: false };
+      return { booking: updatedBooking, alreadyActive: false, lateArrival: false };
     });
+
+    if (result.lateArrival) {
+      throw new ConflictError(
+        `Arrival grace period expired at ${result.booking.arrivalExpiresAt.toISOString()}. Booking marked as NO_SHOW.`
+      );
+    }
 
     try {
       if (!result.alreadyActive && result.booking) {
@@ -364,7 +380,6 @@ export class BookingService {
           slotId: result.booking.slotId,
           status: "ACTIVE",
           slotNumber: result.booking.slot?.slotNumber || "",
-          vehiclePlate: result.booking.vehicle?.licensePlate,
         });
       }
     } catch {
@@ -380,9 +395,11 @@ export class BookingService {
    * Marks booking as COMPLETED.
    */
   static async verifyExit(data: {
-    actorId?: string;
+    actorId: string;
+    actorRole: UserRole;
+    assignedAreaId: string | null;
     bookingCode: string;
-    qrSecret?: string;
+    qrSecret: string;
   }) {
     const result = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
@@ -467,7 +484,6 @@ export class BookingService {
           slotId: result.booking.slotId,
           status: "COMPLETED",
           slotNumber: result.booking.slot?.slotNumber || "",
-          vehiclePlate: result.booking.vehicle?.licensePlate,
         });
       }
     } catch {
@@ -508,18 +524,23 @@ export class BookingService {
     // If user failed to arrive before arrivalExpiresAt, auto-cancel immediately and release slot
     if (booking.status === BookingStatus.PENDING_ARRIVAL && booking.arrivalExpiresAt.getTime() <= now) {
       await prisma.$transaction(async (tx) => {
-        await tx.booking.update({
-          where: { id: booking.id },
+        const transition = await tx.booking.updateMany({
+          where: {
+            id: booking.id,
+            status: BookingStatus.PENDING_ARRIVAL,
+            arrivalExpiresAt: { lte: new Date(now) },
+          },
           data: { status: BookingStatus.NO_SHOW },
         });
 
-        // Release slot or assign to next waiting list user
-        await WaitingListService.allocateNext(
-          tx,
-          booking.slot.areaId,
-          booking.slot.categoryId,
-          booking.slotId
-        );
+        if (transition.count === 1) {
+          await WaitingListService.allocateNext(
+            tx,
+            booking.slot.areaId,
+            booking.slot.categoryId,
+            booking.slotId
+          );
+        }
       });
 
       return null;

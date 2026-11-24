@@ -12,12 +12,12 @@ export const cancelBookingSchema = z.object({
 
 export const verifyArrivalSchema = z.object({
   bookingCode: z.string().min(1, "Booking code is required").toUpperCase(),
-  qrSecret: z.string().optional(),
+  qrSecret: z.string().min(1, "QR secret is required"),
 });
 
 export const verifyExitSchema = z.object({
   bookingCode: z.string().min(1, "Booking code is required").toUpperCase(),
-  qrSecret: z.string().optional(),
+  qrSecret: z.string().min(1, "QR secret is required"),
 });
 
 export const joinWaitingListSchema = z.object({

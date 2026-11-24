@@ -13,7 +13,6 @@ export interface SseBookingUpdateEvent {
   slotId: string;
   status: string;
   slotNumber: string;
-  vehiclePlate?: string;
 }
 
 export interface SseMetricsUpdateEvent {

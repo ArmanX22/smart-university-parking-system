@@ -261,9 +261,9 @@ export class NotificationService {
     });
   }
 
-  static async unregisterToken(token: string) {
+  static async unregisterToken(userId: string, token: string) {
     return await prisma.devicePushToken.deleteMany({
-      where: { token },
+      where: { token, userId },
     });
   }
 

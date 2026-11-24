@@ -1,7 +1,8 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { it, expect, afterAll } from "vitest";
+import { describeDatabase } from "./test-database";
 import prisma from "../lib/prisma";
 
-describe("Live TiDB Cloud Database Integration", () => {
+describeDatabase("Live TiDB Cloud Database Integration", () => {
   afterAll(async () => {
     await prisma.$disconnect();
   });
