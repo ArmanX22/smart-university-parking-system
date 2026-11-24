@@ -19,8 +19,10 @@ function SignInContent() {
     errorParam ? "Authentication failed. Please verify your credentials." : null
   );
 
+
   async function handleCredentialsSignIn(e?: React.FormEvent) {
     if (e) e.preventDefault();
+
     if (!email.trim()) {
       setErrorMsg("Please enter your university email address.");
       return;
@@ -29,51 +31,60 @@ function SignInContent() {
     try {
       setLoadingRole("credentials");
       setErrorMsg(null);
+
       const redirectPath = "/driver";
-      const res = await signIn("credentials", {
+
+      const res = await signIn("demo", {
         email: email.trim().toLowerCase(),
-        password,
         redirect: false,
         callbackUrl: redirectPath,
       });
 
-      if (res?.error) {
-        setErrorMsg(res.error);
+      if (!res?.ok || res.error) {
+        setErrorMsg(res?.error || "Login failed. Please try again.");
       } else {
         router.push(redirectPath);
         router.refresh();
       }
-    } catch {
+    } catch (error) {
+      console.error("Login error:", error);
       setErrorMsg("An unexpected error occurred during sign-in.");
     } finally {
       setLoadingRole(null);
     }
   }
 
-  async function handleFastRoleSignIn(targetEmail: string, targetRole: string, redirectPath: string) {
+
+
+  async function handleFastRoleSignIn(
+    targetEmail: string,
+    targetRole: string,
+    redirectPath: string
+  ) {
     try {
       setLoadingRole(targetRole);
       setErrorMsg(null);
-      const res = await signIn("credentials", {
+
+      const res = await signIn("demo", {
         email: targetEmail,
-        password: "password123",
-        role: targetRole,
         redirect: false,
         callbackUrl: redirectPath,
       });
 
-      if (res?.error) {
-        setErrorMsg(res.error);
+      if (!res?.ok || res.error) {
+        setErrorMsg(res?.error || "Login failed. Please try again.");
       } else {
         router.push(redirectPath);
         router.refresh();
       }
-    } catch {
+    } catch (error) {
+      console.error("Login error:", error);
       setErrorMsg("An unexpected error occurred during sign-in.");
     } finally {
       setLoadingRole(null);
     }
   }
+
 
   return (
     <div className="w-full max-w-lg">
